@@ -1,0 +1,31 @@
+{
+  "snapshots": [
+    {"date":"2025-08-25","limitUp":45,"limitDown":3,"upCount":2200,"downCount":2800,"promoteRate":18,"maxBoard":3,"firstPromote":14,"sealRate":62,"redRate":44,"temperature":48,"stage":"repair"},
+    {"date":"2025-08-26","limitUp":38,"limitDown":5,"upCount":1900,"downCount":3100,"promoteRate":15,"maxBoard":3,"firstPromote":12,"sealRate":55,"redRate":38,"temperature":40,"stage":"repair"},
+    {"date":"2025-08-27","limitUp":77,"limitDown":1,"upCount":2800,"downCount":2200,"promoteRate":35,"maxBoard":4,"firstPromote":18,"sealRate":78,"redRate":56,"temperature":68,"stage":"warm"},
+    {"date":"2025-08-28","limitUp":82,"limitDown":0,"upCount":3000,"downCount":2000,"promoteRate":42,"maxBoard":5,"firstPromote":20,"sealRate":82,"redRate":60,"temperature":73,"stage":"warm"},
+    {"date":"2025-08-29","limitUp":88,"limitDown":0,"upCount":3200,"downCount":1800,"promoteRate":48,"maxBoard":6,"firstPromote":22,"sealRate":85,"redRate":64,"temperature":78,"stage":"hot"},
+    {"date":"2025-09-01","limitUp":83,"limitDown":0,"upCount":3100,"downCount":1900,"promoteRate":52,"maxBoard":7,"firstPromote":24,"sealRate":93.3,"redRate":62,"temperature":80,"stage":"hot"},
+    {"date":"2025-09-02","limitUp":52,"limitDown":8,"upCount":1500,"downCount":3500,"promoteRate":28,"maxBoard":4,"firstPromote":13,"sealRate":77.6,"redRate":30,"temperature":35,"stage":"ebb"},
+    {"date":"2025-09-03","limitUp":40,"limitDown":16,"upCount":1000,"downCount":4000,"promoteRate":15,"maxBoard":4,"firstPromote":11,"sealRate":60,"redRate":20,"temperature":22,"stage":"ice"},
+    {"date":"2025-09-04","limitUp":39,"limitDown":9,"upCount":2444,"downCount":2914,"promoteRate":11.1,"maxBoard":5,"firstPromote":13.9,"sealRate":44.8,"redRate":45.6,"temperature":28,"stage":"ice"},
+    {"date":"2025-09-05","limitUp":42,"limitDown":6,"upCount":2600,"downCount":2700,"promoteRate":14,"maxBoard":4,"firstPromote":15,"sealRate":52,"redRate":49,"temperature":38,"stage":"repair"},
+    {"date":"2025-09-07","limitUp":93,"limitDown":2,"upCount":3167,"downCount":2196,"promoteRate":57.1,"maxBoard":6,"firstPromote":25,"sealRate":83,"redRate":59,"temperature":85,"stage":"hot"},
+    {"date":"2025-09-08","limitUp":75,"limitDown":3,"upCount":2800,"downCount":2500,"promoteRate":40,"maxBoard":4,"firstPromote":20,"sealRate":75,"redRate":53,"temperature":65,"stage":"warm"},
+    {"date":"2025-09-09","limitUp":48,"limitDown":7,"upCount":1794,"downCount":3642,"promoteRate":27.8,"maxBoard":5,"firstPromote":14,"sealRate":65,"redRate":33,"temperature":42,"stage":"ebb"},
+    {"date":"2025-09-10","limitUp":35,"limitDown":11,"upCount":900,"downCount":4400,"promoteRate":12,"maxBoard":4,"firstPromote":10,"sealRate":48,"redRate":17,"temperature":18,"stage":"ice"},
+    {"date":"2025-09-11","limitUp":32,"limitDown":21,"upCount":619,"downCount":4619,"promoteRate":10,"maxBoard":4,"firstPromote":9,"sealRate":42,"redRate":11.8,"temperature":14,"stage":"ice"}
+  ],
+  "reviews": [
+    {"date":"2025-09-07","limitUp":93,"limitDown":2,"upCount":3167,"downCount":2196,"promoteRate":57.1,"maxBoard":6,"firstPromote":25,"note":"情绪高潮，涨停93家，晋级率57.1%，但需注意高温风险，只减不加。","createdAt":"2025-09-07T15:00:00Z"},
+    {"date":"2025-09-11","limitUp":32,"limitDown":21,"upCount":619,"downCount":4619,"promoteRate":10,"maxBoard":4,"firstPromote":9,"note":"冰点确认，跌停21家，红盘率仅11.8%，空仓等待修复信号。","createdAt":"2025-09-11T15:00:00Z"}
+  ],
+  "limitUpStocks": [
+    {"code":"000938","name":"紫光股份","board":3,"change":10.01,"price":28.50,"turnover":8.5,"volumeRatio":2.1,"amount":15.2,"marketCap":420,"concept":"人工智能/算力","sealAmount":25000,"mainInflow":3200},
+    {"code":"002081","name":"金螳螂","board":2,"change":10.02,"price":5.80,"turnover":12.3,"volumeRatio":1.8,"amount":8.5,"marketCap":95,"concept":"建筑装饰","sealAmount":12000,"mainInflow":1500},
+    {"code":"000066","name":"中国长城","board":1,"change":10.03,"price":13.20,"turnover":6.7,"volumeRatio":2.5,"amount":12.8,"marketCap":380,"concept":"信创/国产软件","sealAmount":18000,"mainInflow":2800},
+    {"code":"600276","name":"恒瑞医药","board":1,"change":7.50,"price":45.80,"turnover":3.2,"volumeRatio":1.2,"amount":22.5,"marketCap":2900,"concept":"创新药","sealAmount":0,"mainInflow":-800},
+    {"code":"603259","name":"药明康德","board":1,"change":8.20,"price":62.30,"turnover":4.5,"volumeRatio":1.5,"amount":18.7,"marketCap":1800,"concept":"CXO","sealAmount":5000,"mainInflow":1200}
+  ],
+  "weights": {"limitUp":20,"limitDown":15,"redRate":20,"sealRate":15,"promote":15,"maxBoard":15}
+}

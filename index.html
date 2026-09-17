@@ -1,0 +1,1765 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>情绪周期选股系统 | Emotion Cycle Screener</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0e17; --card: #131825; --card2: #1a2132; --border: #1e2636;
+    --text: #e8ecf1; --text2: #8b95a7; --text3: #5a6478;
+    --red: #ef4444; --green: #22c55e; --blue: #3b82f6;
+    --ice: #6366f1; --repair: #06b6d4; --warm: #eab308; --hot: #ef4444; --ebb: #f97316;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; margin: 0; min-height: 100vh; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+  .card2 { background: var(--card2); border: 1px solid var(--border); border-radius: 8px; }
+  .tab-btn { padding: 10px 20px; border-radius: 8px; color: var(--text2); cursor: pointer; transition: all .2s; font-size: 14px; white-space: nowrap; }
+  .tab-btn:hover { color: var(--text); background: var(--card2); }
+  .tab-btn.active { background: linear-gradient(135deg, #1e40af, #3b82f6); color: #fff; font-weight: 600; }
+  .module { display: none; }
+  .module.active { display: block; }
+  .stat-label { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+  .stat-value { font-size: 28px; font-weight: 700; }
+  .stat-delta { font-size: 12px; margin-top: 2px; }
+  .stage-badge { display: inline-block; padding: 4px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+  .temp-ring { position: relative; width: 180px; height: 180px; }
+  .temp-ring svg { transform: rotate(-90deg); }
+  .temp-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 10px 12px; color: var(--text2); font-weight: 500; border-bottom: 1px solid var(--border); font-size: 12px; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  tr:hover td { background: rgba(59,130,246,.05); }
+  .ladder-item { padding: 8px 12px; border-radius: 6px; margin-bottom: 4px; font-size: 13px; cursor: pointer; transition: all .15s; }
+  .ladder-item:hover { transform: translateX(2px); }
+  .input-field { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text); font-size: 14px; width: 100%; outline: none; transition: border .2s; }
+  .input-field:focus { border-color: var(--blue); }
+  .btn { padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .2s; border: none; }
+  .btn-primary { background: linear-gradient(135deg, #2563eb, #3b82f6); color: #fff; }
+  .btn-primary:hover { opacity: .9; }
+  .btn-ghost { background: var(--card2); color: var(--text2); border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--text3); }
+  .btn-danger { background: rgba(239,68,68,.15); color: var(--red); border: 1px solid rgba(239,68,68,.3); }
+  .pulse { animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
+  .scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .step-indicator { display: flex; align-items: center; gap: 8px; }
+  .step-num { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+  .step-line { flex: 1; height: 2px; background: var(--border); }
+  .action-card { padding: 16px; border-radius: 10px; border-left: 4px solid; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .glow-red { box-shadow: 0 0 20px rgba(239,68,68,.3); }
+  .glow-green { box-shadow: 0 0 20px rgba(34,197,94,.3); }
+  .glow-blue { box-shadow: 0 0 20px rgba(59,130,246,.3); }
+</style>
+</head>
+<body>
+
+<!-- 顶部导航 -->
+<header class="border-b border-[var(--border)] px-6 py-3 flex items-center justify-between sticky top-0 z-50" style="background:rgba(10,14,23,.95);backdrop-filter:blur(10px);">
+  <div class="flex items-center gap-3">
+    <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:linear-gradient(135deg,#1e40af,#3b82f6);">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/></svg>
+    </div>
+    <div>
+      <div class="font-bold text-base">情绪周期选股系统</div>
+      <div class="text-xs" style="color:var(--text3)">Emotion Cycle Screener v1.0</div>
+    </div>
+  </div>
+  <div class="flex items-center gap-2">
+    <span id="currentDate" class="text-xs" style="color:var(--text3)"></span>
+    <button class="btn btn-ghost" onclick="exportData()">导出数据</button>
+    <button class="btn btn-ghost" onclick="document.getElementById('importFile').click()">导入数据</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+  </div>
+</header>
+
+<!-- 标签页 -->
+<nav class="px-6 py-3 flex gap-2 border-b border-[var(--border)] overflow-x-auto scrollbar">
+  <div class="tab-btn active" onclick="switchTab('dashboard')">📊 情绪仪表盘</div>
+  <div class="tab-btn" onclick="switchTab('ladder')">🪜 涨停梯队</div>
+  <div class="tab-btn" onclick="switchTab('screener')">🎯 选股中心</div>
+  <div class="tab-btn" onclick="switchTab('review')">📝 每日复盘</div>
+  <div class="tab-btn" onclick="switchTab('history')">📈 历史周期</div>
+  <div class="tab-btn" onclick="switchTab('settings')">⚙️ 数据设置</div>
+</nav>
+
+<main class="p-6 max-w-[1600px] mx-auto">
+
+<!-- ==================== 模块1: 情绪仪表盘 ==================== -->
+<div id="mod-dashboard" class="module active">
+  <!-- 温度 + 阶段 + 动作 -->
+  <div class="grid grid-cols-12 gap-4 mb-4">
+    <!-- 温度环 -->
+    <div class="card p-6 col-span-3 flex flex-col items-center justify-center">
+      <div class="temp-ring">
+        <svg width="180" height="180">
+          <circle cx="90" cy="90" r="75" fill="none" stroke="#1e2636" stroke-width="12"/>
+          <circle id="tempArc" cx="90" cy="90" r="75" fill="none" stroke="url(#tempGrad)" stroke-width="12" stroke-linecap="round" stroke-dasharray="471" stroke-dashoffset="471"/>
+          <defs>
+            <linearGradient id="tempGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#3b82f6"/>
+              <stop offset="50%" stop-color="#eab308"/>
+              <stop offset="100%" stop-color="#ef4444"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <div class="temp-center">
+          <div id="tempValue" class="text-5xl font-bold">--</div>
+          <div class="text-xs mt-1" style="color:var(--text3)">情绪温度</div>
+        </div>
+      </div>
+      <div id="tempTrend" class="mt-3 text-sm"></div>
+    </div>
+
+    <!-- 阶段判定 -->
+    <div class="card p-6 col-span-3">
+      <div class="stat-label">当前情绪阶段</div>
+      <div id="stageBadge" class="stage-badge mt-2" style="background:rgba(99,102,241,.2);color:var(--ice)">计算中...</div>
+      <div class="mt-4 space-y-2">
+        <div class="flex justify-between text-xs"><span style="color:var(--text2)">阶段方向</span><span id="stageDirection" class="font-semibold">--</span></div>
+        <div class="flex justify-between text-xs"><span style="color:var(--text2)">连续天数</span><span id="stageDays" class="font-semibold">--</span></div>
+        <div class="flex justify-between text-xs"><span style="color:var(--text2)">距上次切换</span><span id="stageSwitch" class="font-semibold">--</span></div>
+      </div>
+      <div class="mt-4 pt-4 border-t border-[var(--border)]">
+        <div class="stat-label mb-2">五阶段进度</div>
+        <div class="flex gap-1">
+          <div id="pg-ice" class="flex-1 h-2 rounded-full" style="background:var(--ice);opacity:.3"></div>
+          <div id="pg-repair" class="flex-1 h-2 rounded-full" style="background:var(--repair);opacity:.3"></div>
+          <div id="pg-warm" class="flex-1 h-2 rounded-full" style="background:var(--warm);opacity:.3"></div>
+          <div id="pg-hot" class="flex-1 h-2 rounded-full" style="background:var(--hot);opacity:.3"></div>
+          <div id="pg-ebb" class="flex-1 h-2 rounded-full" style="background:var(--ebb);opacity:.3"></div>
+        </div>
+        <div class="flex justify-between text-[10px] mt-1" style="color:var(--text3)">
+          <span>冰点</span><span>修复</span><span>升温</span><span>高潮</span><span>退潮</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 四个脚印 -->
+    <div class="card p-6 col-span-6">
+      <div class="flex items-center justify-between mb-4">
+        <div class="stat-label text-base font-semibold" style="color:var(--text)">四个脚印 · 情绪代理指标</div>
+        <span class="text-[10px]" style="color:var(--text3)">口径：含ST、不含北交所、收盘定版</span>
+      </div>
+      <div class="grid grid-cols-4 gap-3">
+        <div class="card2 p-3">
+          <div class="stat-label">涨停家数</div>
+          <div class="stat-value" id="footLimitUp" style="color:var(--red)">--</div>
+          <div class="stat-delta" id="footLimitUpDelta">--</div>
+        </div>
+        <div class="card2 p-3">
+          <div class="stat-label">跌停家数</div>
+          <div class="stat-value" id="footLimitDown" style="color:var(--green)">--</div>
+          <div class="stat-delta" id="footLimitDownDelta">--</div>
+        </div>
+        <div class="card2 p-3">
+          <div class="stat-label">红盘率</div>
+          <div class="stat-value" id="footRedRate">--</div>
+          <div class="stat-delta" id="footRedRateDetail">--</div>
+        </div>
+        <div class="card2 p-3">
+          <div class="stat-label">封板率</div>
+          <div class="stat-value" id="footSealRate">--</div>
+          <div class="stat-delta" id="footSealRateDetail">--</div>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-3 mt-3">
+        <div class="card2 p-3">
+          <div class="stat-label">连板晋级率</div>
+          <div class="text-xl font-bold" id="footPromoteRate">--</div>
+          <div class="text-[10px] mt-1" style="color:var(--text3)">昨日涨停→今日涨停</div>
+        </div>
+        <div class="card2 p-3">
+          <div class="stat-label">首板晋级率</div>
+          <div class="text-xl font-bold" id="footFirstPromote">--</div>
+          <div class="text-[10px] mt-1" style="color:var(--text3)">均值约16%，低于则接力撤</div>
+        </div>
+        <div class="card2 p-3">
+          <div class="stat-label">最高连板</div>
+          <div class="text-xl font-bold" id="footMaxBoard">--</div>
+          <div class="text-[10px] mt-1" style="color:var(--text3)">塔尖高度（结果非原因）</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 动作建议 + 温度趋势 -->
+  <div class="grid grid-cols-12 gap-4">
+    <div class="card p-5 col-span-4">
+      <div class="stat-label text-base font-semibold mb-3" style="color:var(--text)">🎯 动作建议</div>
+      <div id="actionCard" class="action-card" style="background:rgba(99,102,241,.1);border-color:var(--ice)">
+        <div class="font-bold text-lg mb-1" id="actionTitle">等待数据</div>
+        <div class="text-sm" style="color:var(--text2)" id="actionDesc">请在数据设置中录入今日盘面数据</div>
+      </div>
+      <div class="mt-4 space-y-2">
+        <div class="text-xs font-semibold" style="color:var(--text2)">温度-动作对照表</div>
+        <div class="space-y-1 text-xs">
+          <div class="flex justify-between"><span style="color:var(--ice)">● 30°以下</span><span style="color:var(--text2)">空仓/极小仓试错</span></div>
+          <div class="flex justify-between"><span style="color:var(--repair)">● 30-55°</span><span style="color:var(--text2)">轻仓参与，只做最强</span></div>
+          <div class="flex justify-between"><span style="color:var(--warm)">● 55-75°</span><span style="color:var(--text2)">可正常出手</span></div>
+          <div class="flex justify-between"><span style="color:var(--ebb)">● 75-85°</span><span style="color:var(--text2)">只减不加，防分歧</span></div>
+          <div class="flex justify-between"><span style="color:var(--hot)">● 85°以上</span><span style="color:var(--text2)">减仓兑现，不追高</span></div>
+        </div>
+      </div>
+      <div class="mt-4 pt-4 border-t border-[var(--border)]">
+        <div class="text-xs font-semibold mb-2" style="color:var(--text2)">⚠️ 风险红线</div>
+        <div class="space-y-1 text-xs" style="color:var(--text3)">
+          <div>• 高标任何一只断板 → 当天只减不加</div>
+          <div>• 跌停超过5家 → 清仓观察</div>
+          <div>• 温度与指数背离 → 高温即风险</div>
+          <div>• 退潮第2天比第1天更危险</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card p-5 col-span-8">
+      <div class="flex items-center justify-between mb-3">
+        <div class="stat-label text-base font-semibold" style="color:var(--text)">📈 情绪温度趋势</div>
+        <div class="flex gap-2">
+          <button class="btn btn-ghost text-xs" onclick="setTempRange(10)">近10日</button>
+          <button class="btn btn-ghost text-xs" onclick="setTempRange(20)">近20日</button>
+          <button class="btn btn-ghost text-xs" onclick="setTempRange(60)">近60日</button>
+        </div>
+      </div>
+      <div style="height:280px"><canvas id="tempChart"></canvas></div>
+      <div class="grid grid-cols-5 gap-2 mt-3 text-center text-xs">
+        <div class="card2 p-2"><div style="color:var(--ice)">冰点</div><div class="font-bold mt-1" id="cntIce">0天</div></div>
+        <div class="card2 p-2"><div style="color:var(--repair)">修复</div><div class="font-bold mt-1" id="cntRepair">0天</div></div>
+        <div class="card2 p-2"><div style="color:var(--warm)">升温</div><div class="font-bold mt-1" id="cntWarm">0天</div></div>
+        <div class="card2 p-2"><div style="color:var(--hot)">高潮</div><div class="font-bold mt-1" id="cntHot">0天</div></div>
+        <div class="card2 p-2"><div style="color:var(--ebb)">退潮</div><div class="font-bold mt-1" id="cntEbb">0天</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 四步判读速览 -->
+  <div class="card p-5 mt-4">
+    <div class="stat-label text-base font-semibold mb-4" style="color:var(--text)">🔍 四步判读（家数→广度→接力→高度）</div>
+    <div class="grid grid-cols-4 gap-4">
+      <div class="card2 p-4">
+        <div class="step-indicator mb-3">
+          <div class="step-num" style="background:rgba(59,130,246,.2);color:var(--blue)">1</div>
+          <span class="text-sm font-semibold">家数（多不多）</span>
+        </div>
+        <div id="step1Content" class="text-xs" style="color:var(--text2)">涨停家数相对变化，仅作参考不下结论</div>
+        <div id="step1Verdict" class="mt-2 text-sm font-bold"></div>
+      </div>
+      <div class="card2 p-4">
+        <div class="step-indicator mb-3">
+          <div class="step-num" style="background:rgba(6,182,212,.2);color:var(--repair)">2</div>
+          <span class="text-sm font-semibold">广度（面宽不宽）</span>
+        </div>
+        <div id="step2Content" class="text-xs" style="color:var(--text2)">红盘率、涨跌家数比，区分结构性与普涨</div>
+        <div id="step2Verdict" class="mt-2 text-sm font-bold"></div>
+      </div>
+      <div class="card2 p-4">
+        <div class="step-indicator mb-3">
+          <div class="step-num" style="background:rgba(234,179,8,.2);color:var(--warm)">3</div>
+          <span class="text-sm font-semibold">接力（有没有下文）</span>
+        </div>
+        <div id="step3Content" class="text-xs" style="color:var(--text2)">晋级率，最关键也最易判错，需跨天数据</div>
+        <div id="step3Verdict" class="mt-2 text-sm font-bold"></div>
+      </div>
+      <div class="card2 p-4">
+        <div class="step-indicator mb-3">
+          <div class="step-num" style="background:rgba(239,68,68,.2);color:var(--hot)">4</div>
+          <span class="text-sm font-semibold">高度（塔尖稳不稳）</span>
+        </div>
+        <div id="step4Content" class="text-xs" style="color:var(--text2)">最高连板，结果非原因，用于验证判断</div>
+        <div id="step4Verdict" class="mt-2 text-sm font-bold"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 模块2: 涨停梯队 ==================== -->
+<div id="mod-ladder" class="module">
+  <div class="grid grid-cols-12 gap-4">
+    <!-- 连板梯队 -->
+    <div class="card p-5 col-span-5">
+      <div class="flex items-center justify-between mb-4">
+        <div class="stat-label text-base font-semibold" style="color:var(--text)">🪜 连板梯队</div>
+        <span class="text-xs" style="color:var(--text3)" id="ladderDate">--</span>
+      </div>
+      <div id="ladderContainer" class="space-y-3 max-h-[600px] overflow-y-auto scrollbar pr-2">
+        <div class="text-center py-10" style="color:var(--text3)">暂无涨停数据，请在数据设置中录入或导入</div>
+      </div>
+    </div>
+
+    <!-- 涨停明细 -->
+    <div class="card p-5 col-span-7">
+      <div class="flex items-center justify-between mb-4">
+        <div class="stat-label text-base font-semibold" style="color:var(--text)">📋 涨停明细</div>
+        <div class="flex gap-2">
+          <input class="input-field text-xs" style="width:140px" placeholder="搜索代码/名称" id="ladderSearch" oninput="filterLadder()">
+          <select class="input-field text-xs" style="width:100px" id="ladderFilter" onchange="filterLadder()">
+            <option value="all">全部</option>
+            <option value="1">首板</option>
+            <option value="2">2板</option>
+            <option value="3">3板+</option>
+          </select>
+        </div>
+      </div>
+      <div class="overflow-x-auto scrollbar" style="max-height:600px">
+        <table>
+          <thead>
+            <tr>
+              <th>代码</th><th>名称</th><th>连板</th><th>涨跌幅</th><th>封单(万)</th><th>换手率</th><th>成交额(亿)</th><th>所属概念</th>
+            </tr>
+          </thead>
+          <tbody id="limitUpTable">
+            <tr><td colspan="8" class="text-center py-8" style="color:var(--text3)">暂无数据</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 断板清单 + 风险票 -->
+  <div class="grid grid-cols-12 gap-4 mt-4">
+    <div class="card p-5 col-span-6">
+      <div class="flex items-center justify-between mb-3">
+        <div class="stat-label text-base font-semibold" style="color:var(--text)">🚫 断板清单（次日回避）</div>
+        <span class="tag" style="background:rgba(239,68,68,.15);color:var(--red)">退潮期重点</span>
+      </div>
+      <div id="brokenBoardList" class="space-y-2">
+        <div class="text-center py-6 text-xs" style="color:var(--text3)">暂无断板数据</div>
+      </div>
+      <div class="mt-3 text-xs p-3 rounded-lg" style="background:rgba(239,68,68,.05);color:var(--text2)">
+        💡 退潮期建"断板不接"清单，每次复盘列出来，次日重点回避。假涨停比普通断板更危险。
+      </div>
+    </div>
+    <div class="card p-5 col-span-6">
+      <div class="flex items-center justify-between mb-3">
+        <div class="stat-label text-base font-semibold" style="color:var(--text)">⚠️ 风险票识别</div>
+        <span class="tag" style="background:rgba(249,115,22,.15);color:var(--ebb)">自动标记</span>
+      </div>
+      <div id="riskStockList" class="space-y-2">
+        <div class="text-center py-6 text-xs" style="color:var(--text3)">暂无风险票</div>
+      </div>
+      <div class="mt-3 grid grid-cols-3 gap-2 text-xs text-center">
+        <div class="card2 p-2"><div style="color:var(--red)">假涨停</div><div class="font-bold mt-1" id="cntFake">0</div></div>
+        <div class="card2 p-2"><div style="color:var(--ebb)">反包票</div><div class="font-bold mt-1" id="cntReverse">0</div></div>
+        <div class="card2 p-2"><div style="color:var(--text2)">高位断板</div><div class="font-bold mt-1" id="cntHighBreak">0</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 模块3: 选股中心 ==================== -->
+<div id="mod-screener" class="module">
+  <!-- 策略选择 -->
+  <div class="card p-5 mb-4">
+    <div class="stat-label text-base font-semibold mb-3" style="color:var(--text)">🎯 按情绪阶段选股</div>
+    <div class="grid grid-cols-5 gap-3">
+      <div class="strategy-card card2 p-4 cursor-pointer transition-all" data-stage="ice" onclick="selectStrategy('ice')">
+        <div class="text-2xl mb-2">❄️</div>
+        <div class="font-bold text-sm" style="color:var(--ice)">冰点期策略</div>
+        <div class="text-xs mt-2" style="color:var(--text3)">空仓为主，极小仓试错<br>等修复信号，不抄底</div>
+      </div>
+      <div class="strategy-card card2 p-4 cursor-pointer transition-all" data-stage="repair" onclick="selectStrategy('repair')">
+        <div class="text-2xl mb-2">🌱</div>
+        <div class="font-bold text-sm" style="color:var(--repair)">修复期策略</div>
+        <div class="text-xs mt-2" style="color:var(--text3)">轻仓试探最强方向<br>确认后再加，不追高</div>
+      </div>
+      <div class="strategy-card card2 p-4 cursor-pointer transition-all" data-stage="warm" onclick="selectStrategy('warm')">
+        <div class="text-2xl mb-2">🔥</div>
+        <div class="font-bold text-sm" style="color:var(--warm)">升温期策略</div>
+        <div class="text-xs mt-2" style="color:var(--text3)">主要进攻期，正常出手<br>做连板接力，跟最强主线</div>
+      </div>
+      <div class="strategy-card card2 p-4 cursor-pointer transition-all" data-stage="hot" onclick="selectStrategy('hot')">
+        <div class="text-2xl mb-2">💥</div>
+        <div class="font-bold text-sm" style="color:var(--hot)">高潮期策略</div>
+        <div class="text-xs mt-2" style="color:var(--text3)">只减不加，防分歧<br>想"什么时候撤"而非"还能不能上"</div>
+      </div>
+      <div class="strategy-card card2 p-4 cursor-pointer transition-all" data-stage="ebb" onclick="selectStrategy('ebb')">
+        <div class="text-2xl mb-2">🌊</div>
+        <div class="font-bold text-sm" style="color:var(--ebb)">退潮期策略</div>
+        <div class="text-xs mt-2" style="color:var(--text3)">退，不抄高位股底<br>断板不接，第2天更危险</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 当前策略条件 -->
+  <div class="card p-5 mb-4">
+    <div class="flex items-center justify-between mb-3">
+      <div class="stat-label text-base font-semibold" style="color:var(--text)" id="strategyTitle">选股条件</div>
+      <button class="btn btn-primary text-xs" onclick="runScreening()">开始选股</button>
+    </div>
+    <div id="strategyConditions" class="grid grid-cols-4 gap-3">
+      <!-- 动态填充 -->
+    </div>
+  </div>
+
+  <!-- 选股结果 -->
+  <div class="card p-5">
+    <div class="flex items-center justify-between mb-3">
+      <div class="stat-label text-base font-semibold" style="color:var(--text)">📊 选股结果</div>
+      <div class="flex gap-2 items-center">
+        <span class="text-xs" style="color:var(--text3)">共 <span id="screenCount" class="font-bold" style="color:var(--text)">0</span> 只</span>
+        <select class="input-field text-xs" style="width:120px" id="screenSort" onchange="sortScreening()">
+          <option value="score">综合评分</option>
+          <option value="board">连板数</option>
+          <option value="turnover">换手率</option>
+          <option value="amount">成交额</option>
+        </select>
+      </div>
+    </div>
+    <div class="overflow-x-auto scrollbar" style="max-height:500px">
+      <table>
+        <thead>
+          <tr>
+            <th>评分</th><th>代码</th><th>名称</th><th>连板</th><th>现价</th><th>涨跌幅</th><th>换手率</th><th>量比</th><th>成交额(亿)</th><th>流通市值(亿)</th><th>所属概念</th><th>入选理由</th>
+          </tr>
+        </thead>
+        <tbody id="screenResult">
+          <tr><td colspan="12" class="text-center py-8" style="color:var(--text3)">点击"开始选股"运行策略</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 模块4: 每日复盘 ==================== -->
+<div id="mod-review" class="module">
+  <div class="grid grid-cols-12 gap-4">
+    <!-- 复盘表单 -->
+    <div class="card p-5 col-span-7">
+      <div class="flex items-center justify-between mb-4">
+        <div class="stat-label text-base font-semibold" style="color:var(--text)">📝 今日复盘</div>
+        <input type="date" class="input-field text-xs" style="width:160px" id="reviewDate" onchange="loadReviewForDate()">
+      </div>
+
+      <!-- 四步引导 -->
+      <div class="space-y-4">
+        <div class="card2 p-4">
+          <div class="step-indicator mb-3">
+            <div class="step-num" style="background:rgba(59,130,246,.2);color:var(--blue)">1</div>
+            <span class="text-sm font-semibold">家数（多不多）— 看相对变化，不看绝对值</span>
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <div><label class="text-xs" style="color:var(--text2)">今日涨停</label><input type="number" class="input-field mt-1" id="rLimitUp" oninput="autoCalc()"></div>
+            <div><label class="text-xs" style="color:var(--text2)">昨日涨停</label><input type="number" class="input-field mt-1" id="rLimitUpPrev"></div>
+            <div><label class="text-xs" style="color:var(--text2)">今日跌停</label><input type="number" class="input-field mt-1" id="rLimitDown" oninput="autoCalc()"></div>
+          </div>
+        </div>
+
+        <div class="card2 p-4">
+          <div class="step-indicator mb-3">
+            <div class="step-num" style="background:rgba(6,182,212,.2);color:var(--repair)">2</div>
+            <span class="text-sm font-semibold">广度（面宽不宽）— 红盘率、涨跌家数比</span>
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <div><label class="text-xs" style="color:var(--text2)">上涨家数</label><input type="number" class="input-field mt-1" id="rUpCount" oninput="autoCalc()"></div>
+            <div><label class="text-xs" style="color:var(--text2)">下跌家数</label><input type="number" class="input-field mt-1" id="rDownCount" oninput="autoCalc()"></div>
+            <div><label class="text-xs" style="color:var(--text2)">红盘率(自动)</label><input type="text" class="input-field mt-1" id="rRedRate" readonly style="background:var(--card2)"></div>
+          </div>
+        </div>
+
+        <div class="card2 p-4">
+          <div class="step-indicator mb-3">
+            <div class="step-num" style="background:rgba(234,179,8,.2);color:var(--warm)">3</div>
+            <span class="text-sm font-semibold">接力（有没有下文）— 最关键，需跨天数据</span>
+          </div>
+          <div class="grid grid-cols-4 gap-3">
+            <div><label class="text-xs" style="color:var(--text2)">曾涨停数</label><input type="number" class="input-field mt-1" id="rEverLimit" oninput="autoCalc()"></div>
+            <div><label class="text-xs" style="color:var(--text2)">封住涨停</label><input type="number" class="input-field mt-1" id="rSealed" oninput="autoCalc()"></div>
+            <div><label class="text-xs" style="color:var(--text2)">封板率(自动)</label><input type="text" class="input-field mt-1" id="rSealRate" readonly style="background:var(--card2)"></div>
+            <div><label class="text-xs" style="color:var(--text2)">连板晋级率%</label><input type="number" class="input-field mt-1" id="rPromoteRate" step="0.1"></div>
+          </div>
+        </div>
+
+        <div class="card2 p-4">
+          <div class="step-indicator mb-3">
+            <div class="step-num" style="background:rgba(239,68,68,.2);color:var(--hot)">4</div>
+            <span class="text-sm font-semibold">高度（塔尖稳不稳）— 结果非原因，用于验证</span>
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <div><label class="text-xs" style="color:var(--text2)">最高连板</label><input type="number" class="input-field mt-1" id="rMaxBoard"></div>
+            <div><label class="text-xs" style="color:var(--text2)">昨日最高连板</label><input type="number" class="input-field mt-1" id="rMaxBoardPrev"></div>
+            <div><label class="text-xs" style="color:var(--text2)">首板晋级率%</label><input type="number" class="input-field mt-1" id="rFirstPromote" step="0.1"></div>
+          </div>
+        </div>
+
+        <div class="card2 p-4">
+          <div class="text-sm font-semibold mb-3">📝 复盘笔记</div>
+          <textarea class="input-field" rows="3" id="rNote" placeholder="记录今日盘面特征、操作执行情况、教训总结..."></textarea>
+        </div>
+
+        <div class="flex gap-3">
+          <button class="btn btn-primary flex-1" onclick="saveReview()">💾 保存复盘</button>
+          <button class="btn btn-ghost" onclick="clearReviewForm()">清空</button>
+          <button class="btn btn-ghost" onclick="fillFromDashboard()">从仪表盘填充</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 复盘结果 -->
+    <div class="col-span-5 space-y-4">
+      <div class="card p-5">
+        <div class="stat-label text-base font-semibold mb-3" style="color:var(--text)">🎯 复盘结论</div>
+        <div id="reviewResult">
+          <div class="text-center py-8 text-xs" style="color:var(--text3)">填写左侧数据后自动生成结论</div>
+        </div>
+      </div>
+
+      <div class="card p-5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="stat-label text-base font-semibold" style="color:var(--text)">📚 复盘历史</div>
+          <button class="btn btn-ghost text-xs" onclick="clearAllReviews()">清空全部</button>
+        </div>
+        <div id="reviewHistory" class="space-y-2 max-h-[300px] overflow-y-auto scrollbar">
+          <div class="text-center py-6 text-xs" style="color:var(--text3)">暂无复盘记录</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 模块5: 历史周期 ==================== -->
+<div id="mod-history" class="module">
+  <div class="card p-5 mb-4">
+    <div class="flex items-center justify-between mb-4">
+      <div class="stat-label text-base font-semibold" style="color:var(--text)">📈 情绪温度历史曲线</div>
+      <div class="flex gap-2">
+        <button class="btn btn-ghost text-xs" onclick="setHistRange(30)">近1月</button>
+        <button class="btn btn-ghost text-xs" onclick="setHistRange(90)">近3月</button>
+        <button class="btn btn-ghost text-xs" onclick="setHistRange(180)">近半年</button>
+        <button class="btn btn-ghost text-xs" onclick="setHistRange(0)">全部</button>
+      </div>
+    </div>
+    <div style="height:350px"><canvas id="histChart"></canvas></div>
+  </div>
+
+  <div class="grid grid-cols-12 gap-4">
+    <!-- 周期统计 -->
+    <div class="card p-5 col-span-4">
+      <div class="stat-label text-base font-semibold mb-4" style="color:var(--text)">📊 周期统计</div>
+      <div class="space-y-3">
+        <div class="flex justify-between items-center"><span style="color:var(--text2)">统计区间</span><span class="font-bold text-sm" id="histRange">--</span></div>
+        <div class="flex justify-between items-center"><span style="color:var(--text2)">交易日数</span><span class="font-bold text-sm" id="histDays">--</span></div>
+        <div class="flex justify-between items-center"><span style="color:var(--text2)">最高温度</span><span class="font-bold text-sm" style="color:var(--hot)" id="histMaxTemp">--</span></div>
+        <div class="flex justify-between items-center"><span style="color:var(--text2)">最低温度</span><span class="font-bold text-sm" style="color:var(--ice)" id="histMinTemp">--</span></div>
+        <div class="flex justify-between items-center"><span style="color:var(--text2)">平均温度</span><span class="font-bold text-sm" id="histAvgTemp">--</span></div>
+        <div class="flex justify-between items-center"><span style="color:var(--text2)">完整周期数</span><span class="font-bold text-sm" id="histCycles">--</span></div>
+        <div class="flex justify-between items-center"><span style="color:var(--text2)">最大单日跌幅</span><span class="font-bold text-sm" style="color:var(--green)" id="histMaxDrop">--</span></div>
+      </div>
+      <div class="mt-4 pt-4 border-t border-[var(--border)]">
+        <div class="text-xs font-semibold mb-2" style="color:var(--text2)">阶段分布</div>
+        <div class="space-y-2" id="histStageDist"></div>
+      </div>
+    </div>
+
+    <!-- 关键转折点 -->
+    <div class="card p-5 col-span-8">
+      <div class="stat-label text-base font-semibold mb-4" style="color:var(--text)">🔄 关键转折点</div>
+      <div class="overflow-y-auto scrollbar" style="max-height:400px">
+        <table>
+          <thead>
+            <tr><th>日期</th><th>温度</th><th>变化</th><th>阶段</th><th>事件类型</th><th>特征</th></tr>
+          </thead>
+          <tbody id="turningPoints">
+            <tr><td colspan="6" class="text-center py-8" style="color:var(--text3)">暂无历史数据</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 规律总结 -->
+  <div class="card p-5 mt-4">
+    <div class="stat-label text-base font-semibold mb-4" style="color:var(--text)">💡 周期规律总结（基于历史数据）</div>
+    <div class="grid grid-cols-3 gap-4" id="patternInsights">
+      <div class="card2 p-4">
+        <div class="text-sm font-semibold mb-2" style="color:var(--warm)">升得慢，退得快</div>
+        <div class="text-xs" style="color:var(--text2)">情绪升温通常需要数天积累，退潮往往1-2天完成。别把"涨了很久"当成"还能涨很久"的依据。</div>
+      </div>
+      <div class="card2 p-4">
+        <div class="text-sm font-semibold mb-2" style="color:var(--hot)">高度先掉，广度后崩</div>
+        <div class="text-xs" style="color:var(--text2)">高潮转退潮的顺序：最高连板先下降 → 红盘率随后恶化 → 跌停最后爆发。抓"高度先掉"的苗头。</div>
+      </div>
+      <div class="card2 p-4">
+        <div class="text-sm font-semibold mb-2" style="color:var(--ebb)">退潮第2天更危险</div>
+        <div class="text-xs" style="color:var(--text2)">第1天砸最先跑的，第2天轮到"昨天还在扛"的。亏钱效应往昨天的高位票补刀，别因"已跌一天"觉得安全。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 模块6: 数据设置 ==================== -->
+<div id="mod-settings" class="module">
+  <div class="grid grid-cols-12 gap-4">
+    <div class="card p-5 col-span-6">
+      <div class="stat-label text-base font-semibold mb-4" style="color:var(--text">📥 今日盘面数据录入</div>
+      <div class="space-y-3">
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="text-xs" style="color:var(--text2)">日期</label><input type="date" class="input-field mt-1" id="sDate"></div>
+          <div><label class="text-xs" style="color:var(--text2)">涨停家数</label><input type="number" class="input-field mt-1" id="sLimitUp"></div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="text-xs" style="color:var(--text2)">跌停家数</label><input type="number" class="input-field mt-1" id="sLimitDown"></div>
+          <div><label class="text-xs" style="color:var(--text2)">曾涨停数</label><input type="number" class="input-field mt-1" id="sEverLimit"></div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="text-xs" style="color:var(--text2)">上涨家数</label><input type="number" class="input-field mt-1" id="sUpCount"></div>
+          <div><label class="text-xs" style="color:var(--text2)">下跌家数</label><input type="number" class="input-field mt-1" id="sDownCount"></div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="text-xs" style="color:var(--text2)">连板晋级率(%)</label><input type="number" class="input-field mt-1" id="sPromoteRate" step="0.1"></div>
+          <div><label class="text-xs" style="color:var(--text2)">首板晋级率(%)</label><input type="number" class="input-field mt-1" id="sFirstPromote" step="0.1"></div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="text-xs" style="color:var(--text2)">最高连板</label><input type="number" class="input-field mt-1" id="sMaxBoard"></div>
+          <div><label class="text-xs" style="color:var(--text2)">封住涨停数</label><input type="number" class="input-field mt-1" id="sSealed"></div>
+        </div>
+        <button class="btn btn-primary w-full" onclick="saveSnapshot()">💾 保存今日数据</button>
+      </div>
+    </div>
+
+    <div class="col-span-6 space-y-4">
+      <div class="card p-5">
+        <div class="stat-label text-base font-semibold mb-3" style="color:var(--text)">📖 使用说明</div>
+        <div class="space-y-2 text-xs" style="color:var(--text2)">
+          <p><strong style="color:var(--text)">1. 数据录入：</strong>每日收盘后，在本页填入五个核心指标（涨停/跌停家数、红盘率、封板率、晋级率、最高连板），系统自动计算情绪温度并判定阶段。</p>
+          <p><strong style="color:var(--text)">2. 温度计算：</strong>系统对六个维度加权合成0-100的温度值。涨停家数(20%)、跌停家数(15%)、红盘率(20%)、封板率(15%)、晋级率(15%)、最高连板(15%)。</p>
+          <p><strong style="color:var(--text)">3. 阶段判定：</strong>根据温度区间+指标结构自动判定冰点/修复/升温/高潮/退潮五阶段，并给出对应动作建议。</p>
+          <p><strong style="color:var(--text)">4. 选股策略：</strong>在选股中心选择对应阶段的策略，系统根据预设条件筛选候选股票。</p>
+          <p><strong style="color:var(--text)">5. 每日复盘：</strong>按四步判读法（家数→广度→接力→高度）填写复盘，系统自动生成结论并存档。</p>
+          <p><strong style="color:var(--text)">6. 数据导入导出：</strong>支持JSON格式批量导入历史数据，也可导出全部数据备份。</p>
+        </div>
+      </div>
+
+      <div class="card p-5">
+        <div class="stat-label text-base font-semibold mb-3" style="color:var(--text)">🔧 温度权重设置</div>
+        <div class="space-y-3" id="weightSettings">
+          <div class="flex items-center gap-3">
+            <span class="text-xs w-20" style="color:var(--text2)">涨停家数</span>
+            <input type="range" min="0" max="40" value="20" class="flex-1" id="wLimitUp" oninput="updateWeights()">
+            <span class="text-xs w-8 text-right" id="wLimitUpVal">20%</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs w-20" style="color:var(--text2)">跌停家数</span>
+            <input type="range" min="0" max="40" value="15" class="flex-1" id="wLimitDown" oninput="updateWeights()">
+            <span class="text-xs w-8 text-right" id="wLimitDownVal">15%</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs w-20" style="color:var(--text2)">红盘率</span>
+            <input type="range" min="0" max="40" value="20" class="flex-1" id="wRedRate" oninput="updateWeights()">
+            <span class="text-xs w-8 text-right" id="wRedRateVal">20%</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs w-20" style="color:var(--text2)">封板率</span>
+            <input type="range" min="0" max="40" value="15" class="flex-1" id="wSealRate" oninput="updateWeights()">
+            <span class="text-xs w-8 text-right" id="wSealRateVal">15%</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs w-20" style="color:var(--text2)">晋级率</span>
+            <input type="range" min="0" max="40" value="15" class="flex-1" id="wPromote" oninput="updateWeights()">
+            <span class="text-xs w-8 text-right" id="wPromoteVal">15%</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs w-20" style="color:var(--text2)">最高连板</span>
+            <input type="range" min="0" max="40" value="15" class="flex-1" id="wMaxBoard" oninput="updateWeights()">
+            <span class="text-xs w-8 text-right" id="wMaxBoardVal">15%</span>
+          </div>
+          <div class="text-xs pt-2 border-t border-[var(--border)]" style="color:var(--text3)">
+            权重合计：<span id="weightTotal" class="font-bold" style="color:var(--text)">100%</span>
+            <span id="weightWarn" class="ml-2" style="color:var(--red);display:none">⚠️ 权重合计应为100%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 数据管理 -->
+  <div class="card p-5 mt-4">
+    <div class="flex items-center justify-between mb-4">
+      <div class="stat-label text-base font-semibold" style="color:var(--text)">📂 数据管理</div>
+      <div class="flex gap-2">
+        <button class="btn btn-ghost text-xs" onclick="loadDemoData()">加载示例数据</button>
+        <button class="btn btn-danger text-xs" onclick="clearAllData()">清空全部数据</button>
+      </div>
+    </div>
+    <div class="overflow-x-auto scrollbar" style="max-height:300px">
+      <table>
+        <thead>
+          <tr><th>日期</th><th>涨停</th><th>跌停</th><th>红盘率</th><th>封板率</th><th>晋级率</th><th>最高连板</th><th>温度</th><th>阶段</th><th>操作</th></tr>
+        </thead>
+        <tbody id="dataManagerBody">
+          <tr><td colspan="10" class="text-center py-8" style="color:var(--text3)">暂无数据</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<footer class="border-t border-[var(--border)] px-6 py-4 mt-8 text-center text-xs" style="color:var(--text3)">
+  情绪周期选股系统 | 基于"满仓长红"情绪周期理论 | 数据仅供参考，不构成投资建议
+</footer>
+
+<script>
+// ==================== 全局状态 ====================
+const STORAGE_KEY = 'emotion_screener_data';
+let appData = { snapshots: [], reviews: [], limitUpStocks: [], weights: {limitUp:20, limitDown:15, redRate:20, sealRate:15, promote:15, maxBoard:15} };
+let tempChart = null, histChart = null;
+let currentTempRange = 20;
+let currentHistRange = 90;
+let currentStrategy = 'warm';
+let screeningResults = [];
+
+// ==================== 初始化 ====================
+function init() {
+  loadData();
+  setTodayDate();
+  renderAll();
+  initCharts();
+}
+
+function setTodayDate() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('currentDate').textContent = today;
+  document.getElementById('sDate').value = today;
+  document.getElementById('reviewDate').value = today;
+}
+
+function loadData() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) appData = JSON.parse(saved);
+  } catch(e) { console.error('加载数据失败', e); }
+  if (!appData.weights) appData.weights = {limitUp:20, limitDown:15, redRate:20, sealRate:15, promote:15, maxBoard:15};
+  if (!appData.snapshots) appData.snapshots = [];
+  if (!appData.reviews) appData.reviews = [];
+  if (!appData.limitUpStocks) appData.limitUpStocks = [];
+}
+
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+}
+
+// ==================== 情绪计算引擎 ====================
+function calcTemperature(snap) {
+  const w = appData.weights;
+  // 各维度归一化到0-100
+  // 涨停家数：0-150映射到0-100
+  const limitUpScore = Math.min(100, (snap.limitUp || 0) / 150 * 100);
+  // 跌停家数：0-30映射，反向（0跌停=100分，30跌停=0分）
+  const limitDownScore = Math.max(0, 100 - (snap.limitDown || 0) / 30 * 100);
+  // 红盘率：直接百分比
+  const redRateScore = snap.redRate || 0;
+  // 封板率：直接百分比
+  const sealRateScore = snap.sealRate || 0;
+  // 晋级率：0-60映射到0-100
+  const promoteScore = Math.min(100, (snap.promoteRate || 0) / 60 * 100);
+  // 最高连板：0-10映射到0-100
+  const maxBoardScore = Math.min(100, (snap.maxBoard || 0) / 10 * 100);
+
+  const total = w.limitUp + w.limitDown + w.redRate + w.sealRate + w.promote + w.maxBoard;
+  if (total === 0) return 50;
+
+  const temp = (
+    limitUpScore * w.limitUp +
+    limitDownScore * w.limitDown +
+    redRateScore * w.redRate +
+    sealRateScore * w.sealRate +
+    promoteScore * w.promote +
+    maxBoardScore * w.maxBoard
+  ) / total;
+
+  return Math.round(temp);
+}
+
+function detectStage(snap, temp, prevSnap) {
+  // 基于温度+结构判定
+  if (temp < 30) return 'ice';
+  if (temp >= 30 && temp < 50) {
+    // 修复 vs 退潮末：看跌停是否减少、涨停是否回升
+    if (prevSnap && snap.limitDown < prevSnap.limitDown && snap.limitUp >= prevSnap.limitUp) return 'repair';
+    if (prevSnap && snap.limitDown > prevSnap.limitDown) return 'ebb';
+    return 'repair';
+  }
+  if (temp >= 50 && temp < 70) return 'warm';
+  if (temp >= 70 && temp < 85) {
+    if (prevSnap && temp < prevSnap.temperature) return 'ebb';
+    return 'hot';
+  }
+  if (temp >= 85) return 'hot';
+  return 'warm';
+}
+
+function getStageInfo(stage) {
+  const map = {
+    ice: { name: '冰点', color: '#6366f1', action: '等', desc: '空仓或极小仓试错，等修复信号。容错率最低，错了没有第二波救你。' },
+    repair: { name: '修复', color: '#06b6d4', action: '试', desc: '轻仓试探最强方向，确认了再加。跌不动了但还没涨起来，区分反弹与修复。' },
+    warm: { name: '升温', color: '#eab308', action: '上', desc: '赚钱效应确认后的主要进攻期，可正常出手。做连板接力，跟最强主线。' },
+    hot: { name: '高潮', color: '#ef4444', action: '收', desc: '只减不加，防分歧。该想"什么时候撤"而不是"还能不能上"。最热也最危险。' },
+    ebb: { name: '退潮', color: '#f97316', action: '退', desc: '退，不抄高位股底。断板不接，退潮第2天比第1天更危险。赚钱效应消失。' }
+  };
+  return map[stage] || map.warm;
+}
+
+// ==================== 仪表盘渲染 ====================
+function renderDashboard() {
+  const snapshots = appData.snapshots.sort((a,b) => a.date.localeCompare(b.date));
+  if (snapshots.length === 0) {
+    document.getElementById('tempValue').textContent = '--';
+    document.getElementById('stageBadge').textContent = '等待数据';
+    return;
+  }
+
+  const latest = snapshots[snapshots.length - 1];
+  const prev = snapshots.length > 1 ? snapshots[snapshots.length - 2] : null;
+  const temp = latest.temperature || calcTemperature(latest);
+  const stage = latest.stage || detectStage(latest, temp, prev);
+  const stageInfo = getStageInfo(stage);
+
+  // 温度环
+  document.getElementById('tempValue').textContent = temp;
+  document.getElementById('tempValue').style.color = temp > 70 ? 'var(--hot)' : temp > 50 ? 'var(--warm)' : temp > 30 ? 'var(--repair)' : 'var(--ice)';
+  const arc = document.getElementById('tempArc');
+  const circumference = 2 * Math.PI * 75;
+  arc.style.strokeDashoffset = circumference * (1 - temp / 100);
+
+  // 温度趋势
+  if (prev) {
+    const delta = temp - prev.temperature;
+    const el = document.getElementById('tempTrend');
+    el.innerHTML = delta >= 0
+      ? `<span style="color:var(--red)">▲ ${delta}°</span> 较昨日`
+      : `<span style="color:var(--green)">▼ ${Math.abs(delta)}°</span> 较昨日`;
+  }
+
+  // 阶段
+  const badge = document.getElementById('stageBadge');
+  badge.textContent = stageInfo.name + '期 · ' + stageInfo.action;
+  badge.style.background = stageInfo.color + '22';
+  badge.style.color = stageInfo.color;
+
+  // 阶段统计
+  let stageDays = 1;
+  for (let i = snapshots.length - 2; i >= 0; i--) {
+    if ((snapshots[i].stage || detectStage(snapshots[i], snapshots[i].temperature, snapshots[i-1])) === stage) stageDays++;
+    else break;
+  }
+  document.getElementById('stageDays').textContent = stageDays + '天';
+  document.getElementById('stageDirection').textContent = prev && temp > prev.temperature ? '↑ 升温中' : prev && temp < prev.temperature ? '↓ 降温中' : '→ 持平';
+  document.getElementById('stageSwitch').textContent = stageDays + '天前';
+
+  // 五阶段进度条
+  ['ice','repair','warm','hot','ebb'].forEach(s => {
+    const el = document.getElementById('pg-' + s);
+    el.style.opacity = s === stage ? '1' : '.2';
+  });
+
+  // 四个脚印
+  document.getElementById('footLimitUp').textContent = latest.limitUp || 0;
+  document.getElementById('footLimitDown').textContent = latest.limitDown || 0;
+  document.getElementById('footRedRate').textContent = (latest.redRate || 0).toFixed(1) + '%';
+  document.getElementById('footSealRate').textContent = (latest.sealRate || 0).toFixed(1) + '%';
+
+  if (prev) {
+    const luDelta = (latest.limitUp || 0) - (prev.limitUp || 0);
+    document.getElementById('footLimitUpDelta').innerHTML = luDelta >= 0 ? `<span style="color:var(--red)">+${luDelta}</span>` : `<span style="color:var(--green)">${luDelta}</span>`;
+    const ldDelta = (latest.limitDown || 0) - (prev.limitDown || 0);
+    document.getElementById('footLimitDownDelta').innerHTML = ldDelta >= 0 ? `<span style="color:var(--green)">+${ldDelta}</span>` : `<span style="color:var(--red)">${ldDelta}</span>`;
+  }
+
+  const totalTrades = (latest.upCount || 0) + (latest.downCount || 0);
+  document.getElementById('footRedRateDetail').textContent = `涨${latest.upCount||0} / 跌${latest.downCount||0}`;
+  document.getElementById('footSealRateDetail').textContent = `炸板率 ${(100-(latest.sealRate||0)).toFixed(1)}%`;
+
+  document.getElementById('footPromoteRate').textContent = (latest.promoteRate || 0).toFixed(1) + '%';
+  document.getElementById('footPromoteRate').style.color = (latest.promoteRate || 0) > 30 ? 'var(--red)' : 'var(--text2)';
+  document.getElementById('footFirstPromote').textContent = (latest.firstPromote || 0).toFixed(1) + '%';
+  document.getElementById('footFirstPromote').style.color = (latest.firstPromote || 0) < 16 ? 'var(--green)' : 'var(--text2)';
+  document.getElementById('footMaxBoard').textContent = (latest.maxBoard || 0) + '板';
+
+  // 动作建议
+  const actionCard = document.getElementById('actionCard');
+  actionCard.style.background = stageInfo.color + '11';
+  actionCard.style.borderColor = stageInfo.color;
+  document.getElementById('actionTitle').textContent = stageInfo.action + ' · ' + stageInfo.name + '期操作';
+  document.getElementById('actionTitle').style.color = stageInfo.color;
+  document.getElementById('actionDesc').textContent = stageInfo.desc;
+
+  // 四步判读
+  renderFourSteps(latest, prev, temp, stage);
+
+  // 阶段统计
+  renderStageCounts(snapshots);
+}
+
+function renderFourSteps(latest, prev, temp, stage) {
+  // 第一步：家数
+  const lu = latest.limitUp || 0;
+  const prevLu = prev ? (prev.limitUp || 0) : lu;
+  const luVerdict = lu > 80 ? '偏多' : lu > 50 ? '适中' : lu > 30 ? '偏少' : '稀少';
+  document.getElementById('step1Content').textContent = `涨停${lu}家，昨日${prevLu}家，${lu >= prevLu ? '增加' : '减少'}${Math.abs(lu-prevLu)}家`;
+  document.getElementById('step1Verdict').textContent = luVerdict;
+  document.getElementById('step1Verdict').style.color = lu > 60 ? 'var(--red)' : 'var(--text2)';
+
+  // 第二步：广度
+  const rr = latest.redRate || 0;
+  document.getElementById('step2Content').textContent = `红盘率${rr.toFixed(1)}%，涨${latest.upCount||0}/跌${latest.downCount||0}`;
+  const rrVerdict = rr > 60 ? '全面回暖' : rr > 45 ? '偏红' : rr > 35 ? '偏窄' : '极窄';
+  document.getElementById('step2Verdict').textContent = rrVerdict;
+  document.getElementById('step2Verdict').style.color = rr > 50 ? 'var(--red)' : 'var(--green)';
+
+  // 第三步：接力
+  const pr = latest.promoteRate || 0;
+  document.getElementById('step3Content').textContent = `连板晋级率${pr.toFixed(1)}%，首板晋级${(latest.firstPromote||0).toFixed(1)}%`;
+  const prVerdict = pr > 40 ? '接力顺' : pr > 25 ? '接力尚可' : pr > 15 ? '接力弱' : '接力断';
+  document.getElementById('step3Verdict').textContent = prVerdict;
+  document.getElementById('step3Verdict').style.color = pr > 30 ? 'var(--red)' : 'var(--green)';
+
+  // 第四步：高度
+  const mb = latest.maxBoard || 0;
+  const prevMb = prev ? (prev.maxBoard || 0) : mb;
+  document.getElementById('step4Content').textContent = `最高${mb}板，昨日${prevMb}板，${mb >= prevMb ? '维持/上升' : '下降'}`;
+  const mbVerdict = mb >= 7 ? '高度拉满' : mb >= 5 ? '高度尚可' : mb >= 3 ? '高度压缩' : '高度极低';
+  document.getElementById('step4Verdict').textContent = mbVerdict;
+  document.getElementById('step4Verdict').style.color = mb >= 5 ? 'var(--red)' : 'var(--text2)';
+}
+
+function renderStageCounts(snapshots) {
+  const counts = {ice:0, repair:0, warm:0, hot:0, ebb:0};
+  snapshots.forEach(s => {
+    const st = s.stage || detectStage(s, s.temperature, null);
+    counts[st]++;
+  });
+  document.getElementById('cntIce').textContent = counts.ice + '天';
+  document.getElementById('cntRepair').textContent = counts.repair + '天';
+  document.getElementById('cntWarm').textContent = counts.warm + '天';
+  document.getElementById('cntHot').textContent = counts.hot + '天';
+  document.getElementById('cntEbb').textContent = counts.ebb + '天';
+}
+
+// ==================== 图表 ====================
+function initCharts() {
+  const ctx1 = document.getElementById('tempChart').getContext('2d');
+  tempChart = new Chart(ctx1, {
+    type: 'line',
+    data: { labels: [], datasets: [{
+      label: '情绪温度', data: [], borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,.1)',
+      fill: true, tension: .4, pointRadius: 3, pointBackgroundColor: '#3b82f6'
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { min: 0, max: 100, grid: { color: '#1e2636' }, ticks: { color: '#8b95a7' } },
+        x: { grid: { display: false }, ticks: { color: '#8b95a7', maxTicksLimit: 15 } }
+      }
+    }
+  });
+
+  const ctx2 = document.getElementById('histChart').getContext('2d');
+  histChart = new Chart(ctx2, {
+    type: 'line',
+    data: { labels: [], datasets: [{
+      label: '情绪温度', data: [], borderColor: '#eab308', backgroundColor: 'rgba(234,179,8,.1)',
+      fill: true, tension: .3, pointRadius: 2, pointBackgroundColor: '#eab308'
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { min: 0, max: 100, grid: { color: '#1e2636' }, ticks: { color: '#8b95a7' } },
+        x: { grid: { display: false }, ticks: { color: '#8b95a7', maxTicksLimit: 20 } }
+      }
+    }
+  });
+
+  updateTempChart();
+  updateHistChart();
+}
+
+function updateTempChart() {
+  if (!tempChart) return;
+  const snapshots = appData.snapshots.sort((a,b) => a.date.localeCompare(b.date));
+  const range = Math.min(currentTempRange, snapshots.length);
+  const data = snapshots.slice(-range);
+  tempChart.data.labels = data.map(s => s.date.slice(5));
+  tempChart.data.datasets[0].data = data.map(s => s.temperature || calcTemperature(s));
+  tempChart.update();
+}
+
+function setTempRange(n) { currentTempRange = n; updateTempChart(); }
+
+function updateHistChart() {
+  if (!histChart) return;
+  const snapshots = appData.snapshots.sort((a,b) => a.date.localeCompare(b.date));
+  const data = currentHistRange > 0 ? snapshots.slice(-currentHistRange) : snapshots;
+  histChart.data.labels = data.map(s => s.date.slice(5));
+  histChart.data.datasets[0].data = data.map(s => s.temperature || calcTemperature(s));
+  histChart.update();
+  renderHistoryStats(data);
+}
+
+function setHistRange(n) { currentHistRange = n; updateHistChart(); }
+
+function renderHistoryStats(data) {
+  if (data.length === 0) return;
+  const temps = data.map(s => s.temperature || calcTemperature(s));
+  document.getElementById('histRange').textContent = data[0].date + ' ~ ' + data[data.length-1].date;
+  document.getElementById('histDays').textContent = data.length + '天';
+  document.getElementById('histMaxTemp').textContent = Math.max(...temps) + '°';
+  document.getElementById('histMinTemp').textContent = Math.min(...temps) + '°';
+  document.getElementById('histAvgTemp').textContent = (temps.reduce((a,b)=>a+b,0)/temps.length).toFixed(1) + '°';
+
+  let maxDrop = 0;
+  for (let i = 1; i < temps.length; i++) {
+    const drop = temps[i-1] - temps[i];
+    if (drop > maxDrop) maxDrop = drop;
+  }
+  document.getElementById('histMaxDrop').textContent = '- ' + maxDrop + '°';
+
+  // 周期数（冰点到高潮算一个周期）
+  let cycles = 0, inCycle = false;
+  data.forEach(s => {
+    const st = s.stage || detectStage(s, s.temperature, null);
+    if (st === 'hot' && !inCycle) { inCycle = true; cycles++; }
+    if (st === 'ice') inCycle = false;
+  });
+  document.getElementById('histCycles').textContent = cycles + '轮';
+
+  // 阶段分布
+  const counts = {ice:0, repair:0, warm:0, hot:0, ebb:0};
+  data.forEach(s => { counts[s.stage || detectStage(s, s.temperature, null)]++; });
+  const distHtml = Object.entries(counts).map(([k,v]) => {
+    const info = getStageInfo(k);
+    const pct = (v / data.length * 100).toFixed(0);
+    return `<div class="flex items-center gap-2">
+      <span class="w-8 text-xs" style="color:${info.color}">${info.name}</span>
+      <div class="flex-1 h-2 rounded-full" style="background:var(--border)">
+        <div class="h-full rounded-full" style="width:${pct}%;background:${info.color}"></div>
+      </div>
+      <span class="text-xs w-12 text-right" style="color:var(--text2)">${v}天 ${pct}%</span>
+    </div>`;
+  }).join('');
+  document.getElementById('histStageDist').innerHTML = distHtml;
+
+  // 转折点
+  renderTurningPoints(data);
+}
+
+function renderTurningPoints(data) {
+  const points = [];
+  for (let i = 1; i < data.length; i++) {
+    const prev = data[i-1], curr = data[i];
+    const prevTemp = prev.temperature || calcTemperature(prev);
+    const currTemp = curr.temperature || calcTemperature(curr);
+    const delta = currTemp - prevTemp;
+
+    if (delta >= 20) {
+      points.push({ date: curr.date, temp: currTemp, delta: '+'+delta, stage: getStageInfo(curr.stage||detectStage(curr,currTemp,prev)).name, type: '暴力反弹', feature: '温度单日飙升'+delta+'度，情绪从冰点直接拉回' });
+    } else if (delta <= -20) {
+      points.push({ date: curr.date, temp: currTemp, delta: ''+delta, stage: getStageInfo(curr.stage||detectStage(curr,currTemp,prev)).name, type: '断崖退潮', feature: '温度单日暴跌'+Math.abs(delta)+'度，高位票批量倒下' });
+    }
+
+    const prevStage = prev.stage || detectStage(prev, prevTemp, data[i-2]);
+    const currStage = curr.stage || detectStage(curr, currTemp, prev);
+    if (prevStage !== currStage) {
+      points.push({ date: curr.date, temp: currTemp, delta: (delta>=0?'+':'')+delta, stage: getStageInfo(currStage).name, type: '阶段切换', feature: getStageInfo(prevStage).name + ' → ' + getStageInfo(currStage).name });
+    }
+  }
+
+  if (points.length === 0) {
+    document.getElementById('turningPoints').innerHTML = '<tr><td colspan="6" class="text-center py-8" style="color:var(--text3)">暂无转折点数据</td></tr>';
+    return;
+  }
+
+  document.getElementById('turningPoints').innerHTML = points.slice().reverse().map(p => {
+    const info = getStageInfo(p.stage === '冰点'?'ice':p.stage==='修复'?'repair':p.stage==='升温'?'warm':p.stage==='高潮'?'hot':'ebb');
+    const deltaColor = p.delta.startsWith('+') ? 'var(--red)' : 'var(--green)';
+    return `<tr>
+      <td>${p.date}</td>
+      <td class="font-bold">${p.temp}°</td>
+      <td style="color:${deltaColor}">${p.delta}°</td>
+      <td><span class="tag" style="background:${info.color}22;color:${info.color}">${p.stage}</span></td>
+      <td>${p.type}</td>
+      <td style="color:var(--text2);font-size:12px">${p.feature}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ==================== 涨停梯队 ====================
+function renderLadder() {
+  const stocks = appData.limitUpStocks;
+  document.getElementById('ladderDate').textContent = appData.snapshots.length ? appData.snapshots[appData.snapshots.length-1].date : '';
+
+  if (stocks.length === 0) {
+    document.getElementById('ladderContainer').innerHTML = '<div class="text-center py-10" style="color:var(--text3)">暂无涨停数据，请在数据设置中录入或导入</div>';
+    document.getElementById('limitUpTable').innerHTML = '<tr><td colspan="8" class="text-center py-8" style="color:var(--text3)">暂无数据</td></tr>';
+    return;
+  }
+
+  // 按连板数分组
+  const groups = {};
+  stocks.forEach(s => {
+    const b = s.board || 1;
+    if (!groups[b]) groups[b] = [];
+    groups[b].push(s);
+  });
+
+  const boards = Object.keys(groups).sort((a,b) => b - a);
+  let html = '';
+  boards.forEach(b => {
+    const color = b >= 5 ? 'var(--hot)' : b >= 3 ? 'var(--warm)' : 'var(--blue)';
+    html += `<div class="card2 p-3">
+      <div class="flex items-center justify-between mb-2">
+        <span class="font-bold text-sm" style="color:${color}">${b}板 (${groups[b].length}只)</span>
+        <span class="text-xs" style="color:var(--text3)">${b >= 5 ? '高位龙头' : b >= 3 ? '中位接力' : '首板/低位'}</span>
+      </div>
+      <div class="flex flex-wrap gap-1">
+        ${groups[b].map(s => `<div class="ladder-item" style="background:${color}15;color:${color}" onclick="showStockDetail('${s.code}')">${s.name}</div>`).join('')}
+      </div>
+    </div>`;
+  });
+  document.getElementById('ladderContainer').innerHTML = html;
+
+  // 明细表
+  renderLimitUpTable(stocks);
+
+  // 断板清单和风险票
+  renderRiskLists(stocks);
+}
+
+function renderLimitUpTable(stocks) {
+  const search = (document.getElementById('ladderSearch')?.value || '').toLowerCase();
+  const filter = document.getElementById('ladderFilter')?.value || 'all';
+
+  let filtered = stocks.filter(s => {
+    if (search && !s.name.toLowerCase().includes(search) && !s.code.includes(search)) return false;
+    if (filter === '1' && s.board !== 1) return false;
+    if (filter === '2' && s.board !== 2) return false;
+    if (filter === '3' && s.board < 3) return false;
+    return true;
+  });
+
+  document.getElementById('limitUpTable').innerHTML = filtered.map(s => {
+    const boardColor = (s.board||1) >= 5 ? 'var(--hot)' : (s.board||1) >= 3 ? 'var(--warm)' : 'var(--blue)';
+    return `<tr>
+      <td class="font-mono">${s.code}</td>
+      <td class="font-semibold">${s.name}</td>
+      <td><span class="tag" style="background:${boardColor}22;color:${boardColor}">${s.board||1}板</span></td>
+      <td style="color:var(--red)">+${s.change||10}%</td>
+      <td>${s.sealAmount||'--'}</td>
+      <td>${s.turnover||'--'}%</td>
+      <td>${s.amount||'--'}</td>
+      <td style="color:var(--text2);font-size:12px">${s.concept||'--'}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="8" class="text-center py-8" style="color:var(--text3)">无匹配结果</td></tr>';
+}
+
+function filterLadder() { renderLimitUpTable(appData.limitUpStocks); }
+
+function renderRiskLists(stocks) {
+  // 模拟断板清单（基于昨日涨停今日未涨停）
+  const broken = stocks.filter(s => s.isBroken);
+  document.getElementById('brokenBoardList').innerHTML = broken.length ? broken.map(s =>
+    `<div class="flex items-center justify-between card2 p-2">
+      <span class="text-sm">${s.name} <span class="text-xs" style="color:var(--text3)">${s.code}</span></span>
+      <span class="tag" style="background:rgba(239,68,68,.15);color:var(--red)">断板不接</span>
+    </div>`
+  ).join('') : '<div class="text-center py-6 text-xs" style="color:var(--text3)">暂无断板数据</div>';
+
+  // 风险票
+  const fake = stocks.filter(s => s.isFake);
+  const reverse = stocks.filter(s => s.isReverse);
+  const highBreak = stocks.filter(s => s.board >= 3 && s.isBroken);
+
+  document.getElementById('cntFake').textContent = fake.length;
+  document.getElementById('cntReverse').textContent = reverse.length;
+  document.getElementById('cntHighBreak').textContent = highBreak.length;
+
+  const risks = [...fake.map(s=>({...s, riskType:'假涨停'})), ...reverse.map(s=>({...s, riskType:'反包票'}))];
+  document.getElementById('riskStockList').innerHTML = risks.length ? risks.map(s =>
+    `<div class="flex items-center justify-between card2 p-2">
+      <span class="text-sm">${s.name} <span class="text-xs" style="color:var(--text3)">${s.code}</span></span>
+      <span class="tag" style="background:rgba(249,115,22,.15);color:var(--ebb)">${s.riskType}</span>
+    </div>`
+  ).join('') : '<div class="text-center py-6 text-xs" style="color:var(--text3)">暂无风险票</div>';
+}
+
+function showStockDetail(code) {
+  const stock = appData.limitUpStocks.find(s => s.code === code);
+  if (stock) alert(`${stock.name} (${stock.code})\n连板: ${stock.board||1}板\n涨跌幅: +${stock.change||10}%\n换手率: ${stock.turnover||'--'}%\n成交额: ${stock.amount||'--'}亿\n所属概念: ${stock.concept||'--'}`);
+}
+
+// ==================== 选股中心 ====================
+const strategyConfigs = {
+  ice: {
+    title: '❄️ 冰点期选股条件',
+    conditions: [
+      { label: '仓位建议', value: '空仓/极小仓(≤10%)' },
+      { label: '选股方向', value: '仅观察，不主动选股' },
+      { label: '关注信号', value: '跌停减少+缩量止跌+首板试探' },
+      { label: '禁止操作', value: '抄底高位股、追反弹阳线' }
+    ],
+    screenLogic: '冰点期不主动选股，建议空仓等待修复信号。可关注首板中封单坚决、缩量涨停的标的作为观察池。'
+  },
+  repair: {
+    title: '🌱 修复期选股条件',
+    conditions: [
+      { label: '仓位建议', value: '轻仓(20-30%)' },
+      { label: '选股方向', value: '首板→二板晋级、最强方向龙头' },
+      { label: '技术条件', value: '缩量涨停、封单率>50%、换手率5-15%' },
+      { label: '止损纪律', value: '次日不晋级即走，不补仓' }
+    ],
+    screenLogic: '筛选首板中封板质量高、换手率适中、所属概念有持续性的标的。重点关注首板晋级二板的机会，只做最强方向。'
+  },
+  warm: {
+    title: '🔥 升温期选股条件',
+    conditions: [
+      { label: '仓位建议', value: '正常仓位(50-70%)' },
+      { label: '选股方向', value: '连板接力、主线龙头、人气标的' },
+      { label: '技术条件', value: '2板以上、量比>1.5、主力净流入' },
+      { label: '加仓条件', value: '晋级成功且封板坚决可加仓' }
+    ],
+    screenLogic: '筛选2板以上连板股，优先选择所属概念为当前市场主线、主力资金净流入、量比放大的标的。做连板接力，跟最强主线。'
+  },
+  hot: {
+    title: '💥 高潮期选股条件',
+    conditions: [
+      { label: '仓位建议', value: '减仓(≤30%)，只减不加' },
+      { label: '选股方向', value: '持仓兑现，不新开仓' },
+      { label: '风险信号', value: '高标滞涨、炸板率上升、跌停冒头' },
+      { label: '卖出纪律', value: '高标任何一只断板→当天只减不加' }
+    ],
+    screenLogic: '高潮期不建议新开仓，应以持仓兑现为主。如果必须参与，仅考虑低位首板补涨机会，且严格控制仓位。重点监控高标滞涨和炸板率上升信号。'
+  },
+  ebb: {
+    title: '🌊 退潮期选股条件',
+    conditions: [
+      { label: '仓位建议', value: '空仓或极低仓(≤10%)' },
+      { label: '选股方向', value: '不选股，回避为主' },
+      { label: '回避清单', value: '断板票、假涨停、反包票、高位股' },
+      { label: '风险提示', value: '退潮第2天比第1天更危险' }
+    ],
+    screenLogic: '退潮期不主动选股，最大的错误是抄高位股的底。建立"断板不接"清单，次日重点回避。假涨停比普通断板更危险。等待冰点后的修复信号。'
+  }
+};
+
+function selectStrategy(stage) {
+  currentStrategy = stage;
+  document.querySelectorAll('.strategy-card').forEach(c => {
+    c.style.borderColor = c.dataset.stage === stage ? getStageInfo(stage).color : 'var(--border)';
+    c.style.background = c.dataset.stage === stage ? getStageInfo(stage).color + '11' : 'var(--card2)';
+  });
+
+  const config = strategyConfigs[stage];
+  document.getElementById('strategyTitle').textContent = config.title;
+  document.getElementById('strategyConditions').innerHTML = config.conditions.map(c =>
+    `<div class="card2 p-3">
+      <div class="text-xs mb-1" style="color:var(--text3)">${c.label}</div>
+      <div class="text-sm font-semibold">${c.value}</div>
+    </div>`
+  ).join('');
+
+  // 重置结果
+  document.getElementById('screenResult').innerHTML = '<tr><td colspan="12" class="text-center py-8" style="color:var(--text3)">点击"开始选股"运行策略</td></tr>';
+  document.getElementById('screenCount').textContent = '0';
+}
+
+function runScreening() {
+  const stage = currentStrategy;
+  const config = strategyConfigs[stage];
+
+  if (stage === 'ice' || stage === 'ebb' || stage === 'hot') {
+    document.getElementById('screenResult').innerHTML = `<tr><td colspan="12" class="text-center py-8">
+      <div class="text-sm mb-2" style="color:${getStageInfo(stage).color}">${config.screenLogic}</div>
+      <div class="text-xs" style="color:var(--text3)">当前阶段不建议主动选股，请以防守为主</div>
+    </td></tr>`;
+    return;
+  }
+
+  // 基于涨停股票池筛选
+  let pool = appData.limitUpStocks.length > 0 ? [...appData.limitUpStocks] : generateMockStocks(30);
+
+  if (stage === 'repair') {
+    // 修复期：首板为主，封板质量高
+    pool = pool.filter(s => (s.board||1) === 1).map(s => ({...s, score: calcScore(s, stage)}));
+  } else if (stage === 'warm') {
+    // 升温期：2板以上连板接力
+    pool = pool.filter(s => (s.board||1) >= 2).map(s => ({...s, score: calcScore(s, stage)}));
+  }
+
+  pool.sort((a,b) => b.score - a.score);
+  screeningResults = pool;
+
+  document.getElementById('screenCount').textContent = pool.length;
+  renderScreeningTable(pool);
+}
+
+function calcScore(s, stage) {
+  let score = 50;
+  // 连板数加分
+  score += (s.board||1) * 5;
+  // 换手率适中加分
+  const t = s.turnover || 10;
+  if (t >= 5 && t <= 20) score += 15;
+  else if (t > 20) score -= 5;
+  // 量比
+  if (s.volumeRatio && s.volumeRatio > 1.5) score += 10;
+  // 主力净流入
+  if (s.mainInflow && s.mainInflow > 0) score += 10;
+  // 封单
+  if (s.sealAmount && s.sealAmount > 5000) score += 10;
+  // 市值适中（50-200亿）
+  if (s.marketCap && s.marketCap >= 50 && s.marketCap <= 200) score += 10;
+  return Math.min(100, Math.round(score));
+}
+
+function renderScreeningTable(data) {
+  document.getElementById('screenResult').innerHTML = data.map(s => {
+    const scoreColor = s.score >= 80 ? 'var(--hot)' : s.score >= 60 ? 'var(--warm)' : 'var(--text2)';
+    const reasons = [];
+    if ((s.board||1) >= 3) reasons.push('连板梯队');
+    if ((s.turnover||0) >= 5 && (s.turnover||0) <= 20) reasons.push('换手适中');
+    if (s.volumeRatio > 1.5) reasons.push('量比放大');
+    if (s.mainInflow > 0) reasons.push('主力流入');
+    return `<tr>
+      <td><span class="font-bold" style="color:${scoreColor}">${s.score}</span></td>
+      <td class="font-mono">${s.code}</td>
+      <td class="font-semibold">${s.name}</td>
+      <td>${s.board||1}板</td>
+      <td>${s.price||'--'}</td>
+      <td style="color:var(--red)">+${s.change||10}%</td>
+      <td>${s.turnover||'--'}%</td>
+      <td>${s.volumeRatio||'--'}</td>
+      <td>${s.amount||'--'}</td>
+      <td>${s.marketCap||'--'}</td>
+      <td style="color:var(--text2);font-size:12px">${s.concept||'--'}</td>
+      <td style="color:var(--text2);font-size:11px">${reasons.join('、')||'综合入选'}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="12" class="text-center py-8" style="color:var(--text3)">无匹配结果</td></tr>';
+}
+
+function sortScreening() {
+  const sortBy = document.getElementById('screenSort').value;
+  const sorted = [...screeningResults].sort((a,b) => {
+    if (sortBy === 'score') return b.score - a.score;
+    if (sortBy === 'board') return (b.board||1) - (a.board||1);
+    if (sortBy === 'turnover') return (b.turnover||0) - (a.turnover||0);
+    if (sortBy === 'amount') return (b.amount||0) - (a.amount||0);
+    return 0;
+  });
+  renderScreeningTable(sorted);
+}
+
+function generateMockStocks(n) {
+  const names = ['紫光股份','金螳螂','中国长城','恒瑞医药','药明康德','宁德时代','比亚迪','隆基绿能','贵州茅台','五粮液','中芯国际','北方华创','韦尔股份','兆易创新','长电科技','通富微电','华天科技','晶方科技','太极实业','深科技','上海贝岭','士兰微','扬杰科技','捷捷微电','台基股份','苏州固锝','华微电子','有研新材','江丰电子','阿石创'];
+  const concepts = ['半导体','储能','锂矿','医药','人工智能','新能源','芯片','消费电子','5G','军工'];
+  return Array.from({length: n}, (_, i) => ({
+    code: '00' + (1000 + i * 7).toString().slice(-4),
+    name: names[i % names.length],
+    board: Math.floor(Math.random() * 5) + 1,
+    change: (Math.random() * 5 + 5).toFixed(2),
+    price: (Math.random() * 50 + 10).toFixed(2),
+    turnover: (Math.random() * 25 + 3).toFixed(1),
+    volumeRatio: (Math.random() * 3 + 0.5).toFixed(2),
+    amount: (Math.random() * 30 + 2).toFixed(1),
+    marketCap: (Math.random() * 300 + 30).toFixed(0),
+    concept: concepts[Math.floor(Math.random() * concepts.length)],
+    sealAmount: Math.floor(Math.random() * 50000),
+    mainInflow: Math.random() > 0.4 ? Math.floor(Math.random() * 5000) : -Math.floor(Math.random() * 3000)
+  }));
+}
+
+// ==================== 每日复盘 ====================
+function autoCalc() {
+  const up = parseFloat(document.getElementById('rUpCount').value) || 0;
+  const down = parseFloat(document.getElementById('rDownCount').value) || 0;
+  if (up + down > 0) {
+    document.getElementById('rRedRate').value = (up / (up + down) * 100).toFixed(1) + '%';
+  }
+  const ever = parseFloat(document.getElementById('rEverLimit').value) || 0;
+  const sealed = parseFloat(document.getElementById('rSealed').value) || 0;
+  if (ever > 0) {
+    document.getElementById('rSealRate').value = (sealed / ever * 100).toFixed(1) + '%';
+  }
+  updateReviewResult();
+}
+
+function updateReviewResult() {
+  const limitUp = parseFloat(document.getElementById('rLimitUp').value) || 0;
+  const limitDown = parseFloat(document.getElementById('rLimitDown').value) || 0;
+  const upCount = parseFloat(document.getElementById('rUpCount').value) || 0;
+  const downCount = parseFloat(document.getElementById('rDownCount').value) || 0;
+  const everLimit = parseFloat(document.getElementById('rEverLimit').value) || 0;
+  const sealed = parseFloat(document.getElementById('rSealed').value) || 0;
+  const promoteRate = parseFloat(document.getElementById('rPromoteRate').value) || 0;
+  const maxBoard = parseFloat(document.getElementById('rMaxBoard').value) || 0;
+  const firstPromote = parseFloat(document.getElementById('rFirstPromote').value) || 0;
+
+  if (limitUp === 0 && upCount === 0) {
+    document.getElementById('reviewResult').innerHTML = '<div class="text-center py-8 text-xs" style="color:var(--text3)">填写左侧数据后自动生成结论</div>';
+    return;
+  }
+
+  const redRate = upCount + downCount > 0 ? upCount / (upCount + downCount) * 100 : 0;
+  const sealRate = everLimit > 0 ? sealed / everLimit * 100 : 0;
+
+  const snap = { limitUp, limitDown, redRate, sealRate, promoteRate, maxBoard, firstPromote, upCount, downCount };
+  const temp = calcTemperature(snap);
+  const stage = detectStage(snap, temp, null);
+  const info = getStageInfo(stage);
+
+  // 四步判读
+  const step1 = limitUp > 80 ? '偏多' : limitUp > 50 ? '适中' : limitUp > 30 ? '偏少' : '稀少';
+  const step2 = redRate > 60 ? '全面回暖' : redRate > 45 ? '偏红' : redRate > 35 ? '偏窄' : '极窄';
+  const step3 = promoteRate > 40 ? '接力顺' : promoteRate > 25 ? '接力尚可' : promoteRate > 15 ? '接力弱' : '接力断';
+  const step4 = maxBoard >= 7 ? '高度拉满' : maxBoard >= 5 ? '高度尚可' : maxBoard >= 3 ? '高度压缩' : '高度极低';
+
+  // 风险提示
+  const warnings = [];
+  if (limitDown >= 5) warnings.push('⚠️ 跌停超过5家，触发清仓观察红线');
+  if (firstPromote > 0 && firstPromote < 16) warnings.push('⚠️ 首板晋级率低于16%均值，接力资金在撤');
+  if (maxBoard >= 5) warnings.push('⚠️ 高位标注意滞涨信号，高度先掉是退潮前兆');
+  if (sealRate > 0 && sealRate < 50) warnings.push('⚠️ 封板率低于50%，炸板率高，抛压大');
+
+  document.getElementById('reviewResult').innerHTML = `
+    <div class="flex items-center gap-3 mb-4">
+      <div class="text-4xl font-bold" style="color:${info.color}">${temp}°</div>
+      <div>
+        <span class="stage-badge" style="background:${info.color}22;color:${info.color}">${info.name}期</span>
+        <div class="text-xs mt-1" style="color:var(--text3)">动作：${info.action}</div>
+      </div>
+    </div>
+    <div class="space-y-2 text-xs mb-4">
+      <div class="flex justify-between"><span style="color:var(--text2)">① 家数</span><span class="font-semibold">${step1}（涨停${limitUp}家）</span></div>
+      <div class="flex justify-between"><span style="color:var(--text2)">② 广度</span><span class="font-semibold">${step2}（红盘率${redRate.toFixed(1)}%）</span></div>
+      <div class="flex justify-between"><span style="color:var(--text2)">③ 接力</span><span class="font-semibold">${step3}（晋级率${promoteRate}%）</span></div>
+      <div class="flex justify-between"><span style="color:var(--text2)">④ 高度</span><span class="font-semibold">${step4}（最高${maxBoard}板）</span></div>
+    </div>
+    <div class="p-3 rounded-lg" style="background:${info.color}11;border-left:3px solid ${info.color}">
+      <div class="text-xs font-semibold mb-1" style="color:${info.color}">操作建议</div>
+      <div class="text-xs" style="color:var(--text2)">${info.desc}</div>
+    </div>
+    ${warnings.length ? `<div class="mt-3 space-y-1">${warnings.map(w=>`<div class="text-xs" style="color:var(--ebb)">${w}</div>`).join('')}</div>` : ''}
+  `;
+}
+
+function saveReview() {
+  const date = document.getElementById('reviewDate').value;
+  if (!date) { alert('请选择日期'); return; }
+
+  const review = {
+    date,
+    limitUp: parseFloat(document.getElementById('rLimitUp').value) || 0,
+    limitUpPrev: parseFloat(document.getElementById('rLimitUpPrev').value) || 0,
+    limitDown: parseFloat(document.getElementById('rLimitDown').value) || 0,
+    upCount: parseFloat(document.getElementById('rUpCount').value) || 0,
+    downCount: parseFloat(document.getElementById('rDownCount').value) || 0,
+    everLimit: parseFloat(document.getElementById('rEverLimit').value) || 0,
+    sealed: parseFloat(document.getElementById('rSealed').value) || 0,
+    promoteRate: parseFloat(document.getElementById('rPromoteRate').value) || 0,
+    maxBoard: parseFloat(document.getElementById('rMaxBoard').value) || 0,
+    maxBoardPrev: parseFloat(document.getElementById('rMaxBoardPrev').value) || 0,
+    firstPromote: parseFloat(document.getElementById('rFirstPromote').value) || 0,
+    note: document.getElementById('rNote').value,
+    createdAt: new Date().toISOString()
+  };
+
+  // 同时保存为snapshot
+  const redRate = review.upCount + review.downCount > 0 ? review.upCount / (review.upCount + review.downCount) * 100 : 0;
+  const sealRate = review.everLimit > 0 ? review.sealed / review.everLimit * 100 : 0;
+  const snap = { date, limitUp: review.limitUp, limitDown: review.limitDown, redRate, sealRate, promoteRate: review.promoteRate, maxBoard: review.maxBoard, firstPromote: review.firstPromote, upCount: review.upCount, downCount: review.downCount };
+  snap.temperature = calcTemperature(snap);
+  snap.stage = detectStage(snap, snap.temperature, null);
+
+  // 去重保存
+  const existingIdx = appData.reviews.findIndex(r => r.date === date);
+  if (existingIdx >= 0) appData.reviews[existingIdx] = review;
+  else appData.reviews.push(review);
+
+  const snapIdx = appData.snapshots.findIndex(s => s.date === date);
+  if (snapIdx >= 0) appData.snapshots[snapIdx] = snap;
+  else appData.snapshots.push(snap);
+
+  saveData();
+  renderAll();
+  alert('复盘已保存！');
+}
+
+function clearReviewForm() {
+  ['rLimitUp','rLimitUpPrev','rLimitDown','rUpCount','rDownCount','rEverLimit','rSealed','rPromoteRate','rMaxBoard','rMaxBoardPrev','rFirstPromote','rNote'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('rRedRate').value = '';
+  document.getElementById('rSealRate').value = '';
+  updateReviewResult();
+}
+
+function fillFromDashboard() {
+  const latest = appData.snapshots.sort((a,b)=>a.date.localeCompare(b.date)).pop();
+  if (!latest) { alert('仪表盘暂无数据'); return; }
+  document.getElementById('rLimitUp').value = latest.limitUp || '';
+  document.getElementById('rLimitDown').value = latest.limitDown || '';
+  document.getElementById('rUpCount').value = latest.upCount || '';
+  document.getElementById('rDownCount').value = latest.downCount || '';
+  document.getElementById('rPromoteRate').value = latest.promoteRate || '';
+  document.getElementById('rMaxBoard').value = latest.maxBoard || '';
+  document.getElementById('rFirstPromote').value = latest.firstPromote || '';
+  if (latest.sealRate && latest.limitUp) {
+    document.getElementById('rEverLimit').value = Math.round(latest.limitUp / (latest.sealRate/100));
+    document.getElementById('rSealed').value = latest.limitUp;
+  }
+  autoCalc();
+}
+
+function loadReviewForDate() {
+  const date = document.getElementById('reviewDate').value;
+  const review = appData.reviews.find(r => r.date === date);
+  if (review) {
+    document.getElementById('rLimitUp').value = review.limitUp || '';
+    document.getElementById('rLimitUpPrev').value = review.limitUpPrev || '';
+    document.getElementById('rLimitDown').value = review.limitDown || '';
+    document.getElementById('rUpCount').value = review.upCount || '';
+    document.getElementById('rDownCount').value = review.downCount || '';
+    document.getElementById('rEverLimit').value = review.everLimit || '';
+    document.getElementById('rSealed').value = review.sealed || '';
+    document.getElementById('rPromoteRate').value = review.promoteRate || '';
+    document.getElementById('rMaxBoard').value = review.maxBoard || '';
+    document.getElementById('rMaxBoardPrev').value = review.maxBoardPrev || '';
+    document.getElementById('rFirstPromote').value = review.firstPromote || '';
+    document.getElementById('rNote').value = review.note || '';
+    autoCalc();
+  } else {
+    clearReviewForm();
+  }
+}
+
+function renderReviewHistory() {
+  const reviews = [...appData.reviews].sort((a,b) => b.date.localeCompare(a.date));
+  if (reviews.length === 0) {
+    document.getElementById('reviewHistory').innerHTML = '<div class="text-center py-6 text-xs" style="color:var(--text3)">暂无复盘记录</div>';
+    return;
+  }
+  document.getElementById('reviewHistory').innerHTML = reviews.map(r => {
+    const snap = appData.snapshots.find(s => s.date === r.date);
+    const temp = snap ? snap.temperature : '--';
+    const stage = snap ? getStageInfo(snap.stage).name : '--';
+    return `<div class="card2 p-3 cursor-pointer hover:border-[var(--blue)]" onclick="viewReview('${r.date}')">
+      <div class="flex items-center justify-between">
+        <span class="text-sm font-semibold">${r.date}</span>
+        <span class="text-xs" style="color:var(--text2)">${temp}° · ${stage}</span>
+      </div>
+      <div class="text-xs mt-1" style="color:var(--text3)">${r.note ? r.note.slice(0,40) + '...' : '无笔记'}</div>
+    </div>`;
+  }).join('');
+}
+
+function viewReview(date) {
+  document.getElementById('reviewDate').value = date;
+  loadReviewForDate();
+}
+
+function clearAllReviews() {
+  if (confirm('确定清空全部复盘记录？')) {
+    appData.reviews = [];
+    saveData();
+    renderReviewHistory();
+  }
+}
+
+// ==================== 数据设置 ====================
+function saveSnapshot() {
+  const date = document.getElementById('sDate').value;
+  if (!date) { alert('请选择日期'); return; }
+
+  const snap = {
+    date,
+    limitUp: parseFloat(document.getElementById('sLimitUp').value) || 0,
+    limitDown: parseFloat(document.getElementById('sLimitDown').value) || 0,
+    everLimit: parseFloat(document.getElementById('sEverLimit').value) || 0,
+    upCount: parseFloat(document.getElementById('sUpCount').value) || 0,
+    downCount: parseFloat(document.getElementById('sDownCount').value) || 0,
+    promoteRate: parseFloat(document.getElementById('sPromoteRate').value) || 0,
+    firstPromote: parseFloat(document.getElementById('sFirstPromote').value) || 0,
+    maxBoard: parseFloat(document.getElementById('sMaxBoard').value) || 0,
+    sealed: parseFloat(document.getElementById('sSealed').value) || 0
+  };
+  snap.redRate = snap.upCount + snap.downCount > 0 ? snap.upCount / (snap.upCount + snap.downCount) * 100 : 0;
+  snap.sealRate = snap.everLimit > 0 ? snap.sealed / snap.everLimit * 100 : (snap.limitUp > 0 ? 70 : 0);
+  snap.temperature = calcTemperature(snap);
+
+  const prevSnap = appData.snapshots.filter(s => s.date < date).sort((a,b) => b.date.localeCompare(a.date))[0];
+  snap.stage = detectStage(snap, snap.temperature, prevSnap);
+
+  const idx = appData.snapshots.findIndex(s => s.date === date);
+  if (idx >= 0) appData.snapshots[idx] = snap;
+  else appData.snapshots.push(snap);
+
+  saveData();
+  renderAll();
+  alert('数据已保存！');
+}
+
+function updateWeights() {
+  const ids = ['wLimitUp','wLimitDown','wRedRate','wSealRate','wPromote','wMaxBoard'];
+  const keys = ['limitUp','limitDown','redRate','sealRate','promote','maxBoard'];
+  let total = 0;
+  ids.forEach((id, i) => {
+    const val = parseInt(document.getElementById(id).value);
+    document.getElementById(id + 'Val').textContent = val + '%';
+    appData.weights[keys[i]] = val;
+    total += val;
+  });
+  document.getElementById('weightTotal').textContent = total + '%';
+  document.getElementById('weightWarn').style.display = total !== 100 ? 'inline' : 'none';
+  saveData();
+  // 重新计算所有温度
+  appData.snapshots.forEach(s => { s.temperature = calcTemperature(s); });
+  saveData();
+  renderAll();
+}
+
+function renderDataManager() {
+  const snapshots = [...appData.snapshots].sort((a,b) => b.date.localeCompare(a.date));
+  if (snapshots.length === 0) {
+    document.getElementById('dataManagerBody').innerHTML = '<tr><td colspan="10" class="text-center py-8" style="color:var(--text3)">暂无数据</td></tr>';
+    return;
+  }
+  document.getElementById('dataManagerBody').innerHTML = snapshots.map(s => {
+    const info = getStageInfo(s.stage || 'warm');
+    return `<tr>
+      <td>${s.date}</td>
+      <td style="color:var(--red)">${s.limitUp||0}</td>
+      <td style="color:var(--green)">${s.limitDown||0}</td>
+      <td>${(s.redRate||0).toFixed(1)}%</td>
+      <td>${(s.sealRate||0).toFixed(1)}%</td>
+      <td>${(s.promoteRate||0).toFixed(1)}%</td>
+      <td>${s.maxBoard||0}板</td>
+      <td class="font-bold">${s.temperature||calcTemperature(s)}°</td>
+      <td><span class="tag" style="background:${info.color}22;color:${info.color}">${info.name}</span></td>
+      <td><button class="text-xs" style="color:var(--red)" onclick="deleteSnapshot('${s.date}')">删除</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function deleteSnapshot(date) {
+  if (confirm('确定删除 ' + date + ' 的数据？')) {
+    appData.snapshots = appData.snapshots.filter(s => s.date !== date);
+    saveData();
+    renderAll();
+  }
+}
+
+function clearAllData() {
+  if (confirm('确定清空全部数据？此操作不可恢复！')) {
+    appData = { snapshots: [], reviews: [], limitUpStocks: [], weights: {limitUp:20, limitDown:15, redRate:20, sealRate:15, promote:15, maxBoard:15} };
+    saveData();
+    renderAll();
+    alert('数据已清空');
+  }
+}
+
+// ==================== 导入导出 ====================
+function exportData() {
+  const dataStr = JSON.stringify(appData, null, 2);
+  const blob = new Blob([dataStr], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'emotion_screener_' + new Date().toISOString().split('T')[0] + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.snapshots) appData.snapshots = data.snapshots;
+      if (data.reviews) appData.reviews = data.reviews;
+      if (data.limitUpStocks) appData.limitUpStocks = data.limitUpStocks;
+      if (data.weights) appData.weights = data.weights;
+      saveData();
+      renderAll();
+      alert('数据导入成功！共 ' + appData.snapshots.length + ' 条快照、' + appData.reviews.length + ' 条复盘');
+    } catch(err) {
+      alert('导入失败：文件格式错误');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ==================== 示例数据 ====================
+function loadDemoData() {
+  const demoSnapshots = [
+    { date: '2025-08-25', limitUp: 45, limitDown: 3, upCount: 2200, downCount: 2800, promoteRate: 18, maxBoard: 3, firstPromote: 14, sealRate: 62, redRate: 44 },
+    { date: '2025-08-26', limitUp: 38, limitDown: 5, upCount: 1900, downCount: 3100, promoteRate: 15, maxBoard: 3, firstPromote: 12, sealRate: 55, redRate: 38 },
+    { date: '2025-08-27', limitUp: 77, limitDown: 1, upCount: 2800, downCount: 2200, promoteRate: 35, maxBoard: 4, firstPromote: 18, sealRate: 78, redRate: 56 },
+    { date: '2025-08-28', limitUp: 82, limitDown: 0, upCount: 3000, downCount: 2000, promoteRate: 42, maxBoard: 5, firstPromote: 20, sealRate: 82, redRate: 60 },
+    { date: '2025-08-29', limitUp: 88, limitDown: 0, upCount: 3200, downCount: 1800, promoteRate: 48, maxBoard: 6, firstPromote: 22, sealRate: 85, redRate: 64 },
+    { date: '2025-09-01', limitUp: 83, limitDown: 0, upCount: 3100, downCount: 1900, promoteRate: 52, maxBoard: 7, firstPromote: 24, sealRate: 93.3, redRate: 62 },
+    { date: '2025-09-02', limitUp: 52, limitDown: 8, upCount: 1500, downCount: 3500, promoteRate: 28, maxBoard: 4, firstPromote: 13, sealRate: 77.6, redRate: 30 },
+    { date: '2025-09-03', limitUp: 40, limitDown: 16, upCount: 1000, downCount: 4000, promoteRate: 15, maxBoard: 4, firstPromote: 11, sealRate: 60, redRate: 20 },
+    { date: '2025-09-04', limitUp: 39, limitDown: 9, upCount: 2444, downCount: 2914, promoteRate: 11.1, maxBoard: 5, firstPromote: 13.9, sealRate: 44.8, redRate: 45.6 },
+    { date: '2025-09-05', limitUp: 42, limitDown: 6, upCount: 2600, downCount: 2700, promoteRate: 14, maxBoard: 4, firstPromote: 15, sealRate: 52, redRate: 49 },
+    { date: '2025-09-07', limitUp: 93, limitDown: 2, upCount: 3167, downCount: 2196, promoteRate: 57.1, maxBoard: 6, firstPromote: 25, sealRate: 83, redRate: 59 },
+    { date: '2025-09-08', limitUp: 75, limitDown: 3, upCount: 2800, downCount: 2500, promoteRate: 40, maxBoard: 4, firstPromote: 20, sealRate: 75, redRate: 53 },
+    { date: '2025-09-09', limitUp: 48, limitDown: 7, upCount: 1794, downCount: 3642, promoteRate: 27.8, maxBoard: 5, firstPromote: 14, sealRate: 65, redRate: 33 },
+    { date: '2025-09-10', limitUp: 35, limitDown: 11, upCount: 900, downCount: 4400, promoteRate: 12, maxBoard: 4, firstPromote: 10, sealRate: 48, redRate: 17 },
+    { date: '2025-09-11', limitUp: 32, limitDown: 21, upCount: 619, downCount: 4619, promoteRate: 10, maxBoard: 4, firstPromote: 9, sealRate: 42, redRate: 11.8 }
+  ];
+
+  demoSnapshots.forEach(s => {
+    s.temperature = calcTemperature(s);
+    const idx = appData.snapshots.findIndex(x => x.date === s.date);
+    if (idx >= 0) appData.snapshots[idx] = s;
+    else appData.snapshots.push(s);
+  });
+
+  // 重新计算阶段
+  appData.snapshots.sort((a,b) => a.date.localeCompare(b.date));
+  appData.snapshots.forEach((s, i) => {
+    s.stage = detectStage(s, s.temperature, i > 0 ? appData.snapshots[i-1] : null);
+  });
+
+  // 示例涨停股票
+  appData.limitUpStocks = generateMockStocks(25);
+
+  saveData();
+  renderAll();
+  alert('示例数据已加载！包含15个交易日的情绪周期数据和25只涨停股票。');
+}
+
+// ==================== 通用 ====================
+function switchTab(name) {
+  document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('mod-' + name).classList.add('active');
+  const tabBtn = document.querySelector('.tab-btn[onclick*="switchTab(\'' + name + '\')"]');
+  if (tabBtn) tabBtn.classList.add('active');
+
+  if (name === 'history') updateHistChart();
+  if (name === 'screener') selectStrategy(currentStrategy);
+}
+
+function renderAll() {
+  renderDashboard();
+  renderLadder();
+  renderReviewHistory();
+  renderDataManager();
+  updateTempChart();
+  if (histChart) updateHistChart();
+}
+
+// 启动
+window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
