@@ -202,7 +202,24 @@ def stock_to_camel(stock):
 # ==================== 路由 ====================
 @app.route('/')
 def index():
-    return send_from_directory('.', 'index.html')
+    # 自动获取或创建demo用户的API Key，注入到HTML中
+    db = get_db()
+    row = db.execute("SELECT api_key FROM users WHERE username = 'demo' LIMIT 1").fetchone()
+    if not row:
+        # 自动创建demo用户
+        import uuid, hashlib as hl
+        api_key = hl.sha256(f"demo{uuid.uuid4()}".encode()).hexdigest()[:32]
+        db.execute("INSERT INTO users (username, api_key) VALUES ('demo', ?)", (api_key,))
+        db.commit()
+    else:
+        api_key = row['api_key']
+    # 读取HTML并注入API Key
+    with open('index.html', 'r', encoding='utf-8') as f:
+        html = f.read()
+    inject = f'<script>window.__SERVER_API_KEY__ = "{api_key}";window.__SERVER_ORIGIN__ = window.location.origin;</script>'
+    html = html.replace('</head>', inject + '\n</head>')
+    from flask import Response
+    return Response(html, mimetype='text/html')
 
 @app.route('/api/health')
 def health():

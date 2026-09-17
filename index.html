@@ -561,6 +561,13 @@ function loadBackendConfig() {
     var saved = localStorage.getItem(BACKEND_CONFIG_KEY);
     if (saved) backendConfig = JSON.parse(saved);
   } catch(e) { console.error('加载后端配置失败', e); }
+  // 后端自动注入模式：通过Flask后端访问时，自动配置并连接
+  if (window.__SERVER_API_KEY__) {
+    backendConfig.url = window.__SERVER_ORIGIN__ || window.location.origin;
+    backendConfig.apiKey = window.__SERVER_API_KEY__;
+    backendConfig.enabled = true;
+    localStorage.setItem(BACKEND_CONFIG_KEY, JSON.stringify(backendConfig));
+  }
   var urlEl = document.getElementById('backendUrl');
   var keyEl = document.getElementById('backendApiKey');
   var badgeEl = document.getElementById('backendModeBadge');
@@ -570,6 +577,10 @@ function loadBackendConfig() {
     badgeEl.textContent = backendConfig.enabled ? '后端模式' : '本地模式';
     badgeEl.style.background = backendConfig.enabled ? 'rgba(34,197,94,.15)' : 'rgba(59,130,246,.15)';
     badgeEl.style.color = backendConfig.enabled ? '#22c55e' : 'var(--blue)';
+  }
+  // 后端自动模式：连接成功后自动从后端加载数据
+  if (window.__SERVER_API_KEY__) {
+    setTimeout(function() { syncFromBackend(true); }, 500);
   }
 }
 
@@ -1259,6 +1270,13 @@ function loadBackendConfig() {
     var saved = localStorage.getItem(BACKEND_CONFIG_KEY);
     if (saved) backendConfig = JSON.parse(saved);
   } catch(e) { console.error('加载后端配置失败', e); }
+  // 后端自动注入模式：通过Flask后端访问时，自动配置并连接
+  if (window.__SERVER_API_KEY__) {
+    backendConfig.url = window.__SERVER_ORIGIN__ || window.location.origin;
+    backendConfig.apiKey = window.__SERVER_API_KEY__;
+    backendConfig.enabled = true;
+    localStorage.setItem(BACKEND_CONFIG_KEY, JSON.stringify(backendConfig));
+  }
   var urlEl = document.getElementById('backendUrl');
   var keyEl = document.getElementById('backendApiKey');
   var badgeEl = document.getElementById('backendModeBadge');
@@ -1268,6 +1286,10 @@ function loadBackendConfig() {
     badgeEl.textContent = backendConfig.enabled ? '后端模式' : '本地模式';
     badgeEl.style.background = backendConfig.enabled ? 'rgba(34,197,94,.15)' : 'rgba(59,130,246,.15)';
     badgeEl.style.color = backendConfig.enabled ? '#22c55e' : 'var(--blue)';
+  }
+  // 后端自动模式：连接成功后自动从后端加载数据
+  if (window.__SERVER_API_KEY__) {
+    setTimeout(function() { syncFromBackend(true); }, 500);
   }
 }
 
@@ -5739,6 +5761,13 @@ function loadBackendConfig() {
     var saved = localStorage.getItem(BACKEND_CONFIG_KEY);
     if (saved) backendConfig = JSON.parse(saved);
   } catch(e) { console.error('加载后端配置失败', e); }
+  // 后端自动注入模式：通过Flask后端访问时，自动配置并连接
+  if (window.__SERVER_API_KEY__) {
+    backendConfig.url = window.__SERVER_ORIGIN__ || window.location.origin;
+    backendConfig.apiKey = window.__SERVER_API_KEY__;
+    backendConfig.enabled = true;
+    localStorage.setItem(BACKEND_CONFIG_KEY, JSON.stringify(backendConfig));
+  }
   var urlEl = document.getElementById('backendUrl');
   var keyEl = document.getElementById('backendApiKey');
   var badgeEl = document.getElementById('backendModeBadge');
@@ -5748,6 +5777,10 @@ function loadBackendConfig() {
     badgeEl.textContent = backendConfig.enabled ? '后端模式' : '本地模式';
     badgeEl.style.background = backendConfig.enabled ? 'rgba(34,197,94,.15)' : 'rgba(59,130,246,.15)';
     badgeEl.style.color = backendConfig.enabled ? '#22c55e' : 'var(--blue)';
+  }
+  // 后端自动模式：连接成功后自动从后端加载数据
+  if (window.__SERVER_API_KEY__) {
+    setTimeout(function() { syncFromBackend(true); }, 500);
   }
 }
 
