@@ -504,7 +504,9 @@ else:  # 温度 >= 85
 
 ```
 emotion-screener/
-├── index.html                  # 主应用（单文件，含全部HTML/CSS/JS，v1.1）
+├── index.html                  # 主应用（单文件，含全部HTML/CSS/JS，v2.0）
+├── server.py                   # V2.0 后端服务（Flask + SQLite + REST API + AKShare集成）
+├── emotion_screener.db         # SQLite数据库文件（运行后自动生成，已gitignore）
 ├── README.md                   # 项目需求文档与使用说明
 ├── data_collector.py           # 数据采集脚本（当日数据版）
 ├── fetch_historical_data.py    # 历史数据采集脚本（多日历史版，推荐使用）
@@ -640,7 +642,83 @@ python data_collector.py
 
 ---
 
-## 12. 开发路线图
+## 12. 后端服务（V2.0）
+
+### 12.1 架构说明
+
+V2.0 引入可选的后端服务模式，支持数据持久化和多设备访问：
+
+- **后端框架**：Python Flask
+- **数据库**：SQLite（单文件，无需额外安装）
+- **认证方式**：API Key（每个用户独立数据隔离）
+- **双模式**：本地模式（localStorage）/ 后端模式（API同步）可随时切换
+
+### 12.2 启动后端
+
+```bash
+# 安装依赖
+pip install flask akshare pandas
+
+# 启动服务（默认监听 0.0.0.0:5000）
+python server.py
+```
+
+启动后访问 `http://127.0.0.1:5000/` 即可通过后端服务使用应用。
+
+### 12.3 注册用户
+
+```bash
+# 通过API注册，获取API Key
+curl -X POST http://127.0.0.1:5000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "yourname"}'
+```
+
+返回示例：
+```json
+{"username": "yourname", "api_key": "xxxxxxxxxxxxxxxx", "message": "注册成功"}
+```
+
+### 12.4 前端配置
+
+1. 打开应用，进入「数据设置」→「后端服务设置」
+2. 填写后端API地址（默认 `http://127.0.0.1:5000`）
+3. 填写API Key
+4. 点击「测试连接」验证
+5. 点击「上传到后端」将本地数据同步到服务器
+6. 点击「切换模式」切换到后端模式（数据从服务器加载）
+
+### 12.5 API 接口列表
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | /api/health | 健康检查 |
+| POST | /api/auth/register | 注册用户 |
+| GET | /api/snapshots | 获取情绪快照列表 |
+| POST | /api/snapshots | 新增/更新单条快照 |
+| POST | /api/snapshots/batch | 批量保存快照 |
+| GET | /api/stocks | 获取涨停股票列表 |
+| POST | /api/stocks | 批量保存涨停股票 |
+| GET | /api/trades | 获取交易记录 |
+| POST | /api/trades | 新增交易记录 |
+| DELETE | /api/trades/:id | 删除交易记录 |
+| GET | /api/conditions | 获取选股条件 |
+| POST | /api/conditions | 保存选股条件 |
+| GET | /api/export | 导出全量数据 |
+| POST | /api/import | 导入数据 |
+| POST | /api/fetch | 触发AKShare数据采集 |
+
+### 12.6 移动端适配
+
+应用已支持响应式布局：
+- **768px以下**（平板）：6列网格、双列布局、字体缩小
+- **480px以下**（手机）：单列布局、底部弹窗、大按钮（44px触摸目标）
+- 触摸设备active状态反馈
+- iPhone底部安全区适配
+
+---
+
+## 13. 开发路线图
 
 ### v1.0 ✅
 
@@ -673,12 +751,14 @@ python data_collector.py
 
 > 说明：纯前端架构下"数据云端同步"通过增强的导出/导入功能实现（一键导出全量JSON备份，可在多设备间迁移）。真正的云端同步需后端服务支持，列入v2.0规划。
 
-### v2.0（远期规划）
+### v2.0（当前版本）✅
 
-- [ ] 后端服务化（Node.js/Python 后端，支持多用户）
-- [ ] 实时推送（情绪阶段变化、风险信号实时提醒）
-- [ ] 移动端适配（响应式布局，手机可用）
-- [ ] 社区功能（策略分享、复盘交流）
+- [x] 后端服务化（Python Flask + SQLite，REST API，多用户API Key认证）
+- [x] 移动端适配（响应式布局，768px/480px双断点，触摸优化，安全区适配）
+- [ ] 实时推送（情绪阶段变化、风险信号实时提醒）— 暂未实现
+- [ ] 社区功能（策略分享、复盘交流）— 暂未实现
+
+> 说明：根据用户需求，v2.0暂不实现实时推送和社区功能，聚焦后端服务化和移动端适配。后端服务支持本地/后端双模式切换，数据可在浏览器localStorage和服务器SQLite之间同步。
 
 ---
 

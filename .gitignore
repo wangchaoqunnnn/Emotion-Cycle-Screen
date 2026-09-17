@@ -35,6 +35,12 @@ yarn-error.log*
 # data/*.json
 !data/demo_data.json
 
+# Database (runtime-generated)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
 # Logs
 *.log
 logs/

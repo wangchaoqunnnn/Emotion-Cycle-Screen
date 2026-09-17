@@ -551,11 +551,152 @@ function compareCycles() {
     '</div>';
 }
 
+
+// ==================== V2.0: 后端服务对接 ====================
+var BACKEND_CONFIG_KEY = 'emotion_screener_backend_config';
+var backendConfig = { enabled: false, url: 'http://127.0.0.1:5000', apiKey: '' };
+
+function loadBackendConfig() {
+  try {
+    var saved = localStorage.getItem(BACKEND_CONFIG_KEY);
+    if (saved) backendConfig = JSON.parse(saved);
+  } catch(e) { console.error('加载后端配置失败', e); }
+  var urlEl = document.getElementById('backendUrl');
+  var keyEl = document.getElementById('backendApiKey');
+  var badgeEl = document.getElementById('backendModeBadge');
+  if (urlEl) urlEl.value = backendConfig.url;
+  if (keyEl) keyEl.value = backendConfig.apiKey;
+  if (badgeEl) {
+    badgeEl.textContent = backendConfig.enabled ? '后端模式' : '本地模式';
+    badgeEl.style.background = backendConfig.enabled ? 'rgba(34,197,94,.15)' : 'rgba(59,130,246,.15)';
+    badgeEl.style.color = backendConfig.enabled ? '#22c55e' : 'var(--blue)';
+  }
+}
+
+function saveBackendConfig() {
+  backendConfig.url = document.getElementById('backendUrl')?.value || 'http://127.0.0.1:5000';
+  backendConfig.apiKey = document.getElementById('backendApiKey')?.value || '';
+  localStorage.setItem(BACKEND_CONFIG_KEY, JSON.stringify(backendConfig));
+}
+
+function apiRequest(path, method, data) {
+  return new Promise(function(resolve, reject) {
+    var url = backendConfig.url.replace(/\/$/, '') + path;
+    var opts = {
+      method: method || 'GET',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': backendConfig.apiKey }
+    };
+    if (data) opts.body = JSON.stringify(data);
+    fetch(url, opts).then(function(r) {
+      return r.json().then(function(j) { return { status: r.status, data: j }; });
+    }).then(function(result) {
+      if (result.status >= 400) reject(result.data);
+      else resolve(result.data);
+    }).catch(reject);
+  });
+}
+
+function testBackendConnection() {
+  saveBackendConfig();
+  var statusEl = document.getElementById('backendStatus');
+  statusEl.textContent = '正在测试连接...';
+  statusEl.style.color = 'var(--text3)';
+  fetch(backendConfig.url.replace(/\/$/, '') + '/api/health')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.status === 'ok') {
+        statusEl.innerHTML = '✅ 连接成功！服务版本: ' + data.version;
+        statusEl.style.color = '#22c55e';
+      } else {
+        statusEl.textContent = '❌ 连接失败: ' + JSON.stringify(data);
+        statusEl.style.color = '#ef4444';
+      }
+    })
+    .catch(function(e) {
+      statusEl.textContent = '❌ 无法连接: ' + e.message;
+      statusEl.style.color = '#ef4444';
+    });
+}
+
+function toggleBackendMode() {
+  saveBackendConfig();
+  if (!backendConfig.apiKey) {
+    alert('请先输入API Key');
+    return;
+  }
+  backendConfig.enabled = !backendConfig.enabled;
+  saveBackendConfig();
+  loadBackendConfig();
+  if (backendConfig.enabled) {
+    alert('已切换到后端模式\n正在从后端拉取数据...');
+    syncFromBackend();
+  } else {
+    alert('已切换到本地模式\n数据将存储在浏览器中');
+    renderAll();
+  }
+}
+
+function syncToBackend() {
+  if (!backendConfig.apiKey) { alert('请先输入API Key'); return; }
+  var statusEl = document.getElementById('backendStatus');
+  statusEl.textContent = '正在上传数据到后端...';
+  statusEl.style.color = 'var(--text3)';
+
+  Promise.all([
+    apiRequest('/api/snapshots/batch', 'POST', { snapshots: appData.snapshots }),
+    apiRequest('/api/stocks', 'POST', { stocks: appData.limitUpStocks, date: appData.snapshots.length ? appData.snapshots[appData.snapshots.length-1].date : new Date().toISOString().split('T')[0] }),
+  ]).then(function(results) {
+    // 上传交易记录
+    var promises = (appData.trades || []).map(function(t) {
+      return apiRequest('/api/trades', 'POST', t).catch(function() {});
+    });
+    return Promise.all(promises).then(function() { return results; });
+  }).then(function() {
+    statusEl.innerHTML = '✅ 数据上传成功！快照: ' + appData.snapshots.length + '条, 股票: ' + appData.limitUpStocks.length + '只, 交易: ' + (appData.trades||[]).length + '笔';
+    statusEl.style.color = '#22c55e';
+  }).catch(function(e) {
+    statusEl.textContent = '❌ 上传失败: ' + (e.error || e.message || JSON.stringify(e));
+    statusEl.style.color = '#ef4444';
+  });
+}
+
+function syncFromBackend() {
+  if (!backendConfig.apiKey) { alert('请先输入API Key'); return; }
+  var statusEl = document.getElementById('backendStatus');
+  statusEl.textContent = '正在从后端拉取数据...';
+  statusEl.style.color = 'var(--text3)';
+
+  Promise.all([
+    apiRequest('/api/snapshots', 'GET'),
+    apiRequest('/api/stocks', 'GET'),
+    apiRequest('/api/trades', 'GET'),
+  ]).then(function(results) {
+    appData.snapshots = results[0] || [];
+    // 股票只取最新日期的
+    var stocks = results[1] || [];
+    if (stocks.length > 0) {
+      var latestDate = stocks[0].date;
+      appData.limitUpStocks = stocks.filter(function(s) { return s.date === latestDate; });
+    } else {
+      appData.limitUpStocks = [];
+    }
+    appData.trades = results[2] || [];
+    saveData();
+    renderAll();
+    statusEl.innerHTML = '✅ 数据拉取成功！快照: ' + appData.snapshots.length + '条, 股票: ' + appData.limitUpStocks.length + '只, 交易: ' + appData.trades.length + '笔';
+    statusEl.style.color = '#22c55e';
+  }).catch(function(e) {
+    statusEl.textContent = '❌ 拉取失败: ' + (e.error || e.message || JSON.stringify(e));
+    statusEl.style.color = '#ef4444';
+  });
+}
+
 // 启动（V1.2增强）
 window.addEventListener('DOMContentLoaded', function() {
   init();
   renderSavedConditions();
   initTradeForm();
+  loadBackendConfig();
   var tradeDateEl = document.getElementById('tradeDate');
   if (tradeDateEl) tradeDateEl.addEventListener('change', updateTradeStageHint);
 });
@@ -1108,11 +1249,152 @@ function compareCycles() {
     '</div>';
 }
 
+
+// ==================== V2.0: 后端服务对接 ====================
+var BACKEND_CONFIG_KEY = 'emotion_screener_backend_config';
+var backendConfig = { enabled: false, url: 'http://127.0.0.1:5000', apiKey: '' };
+
+function loadBackendConfig() {
+  try {
+    var saved = localStorage.getItem(BACKEND_CONFIG_KEY);
+    if (saved) backendConfig = JSON.parse(saved);
+  } catch(e) { console.error('加载后端配置失败', e); }
+  var urlEl = document.getElementById('backendUrl');
+  var keyEl = document.getElementById('backendApiKey');
+  var badgeEl = document.getElementById('backendModeBadge');
+  if (urlEl) urlEl.value = backendConfig.url;
+  if (keyEl) keyEl.value = backendConfig.apiKey;
+  if (badgeEl) {
+    badgeEl.textContent = backendConfig.enabled ? '后端模式' : '本地模式';
+    badgeEl.style.background = backendConfig.enabled ? 'rgba(34,197,94,.15)' : 'rgba(59,130,246,.15)';
+    badgeEl.style.color = backendConfig.enabled ? '#22c55e' : 'var(--blue)';
+  }
+}
+
+function saveBackendConfig() {
+  backendConfig.url = document.getElementById('backendUrl')?.value || 'http://127.0.0.1:5000';
+  backendConfig.apiKey = document.getElementById('backendApiKey')?.value || '';
+  localStorage.setItem(BACKEND_CONFIG_KEY, JSON.stringify(backendConfig));
+}
+
+function apiRequest(path, method, data) {
+  return new Promise(function(resolve, reject) {
+    var url = backendConfig.url.replace(/\/$/, '') + path;
+    var opts = {
+      method: method || 'GET',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': backendConfig.apiKey }
+    };
+    if (data) opts.body = JSON.stringify(data);
+    fetch(url, opts).then(function(r) {
+      return r.json().then(function(j) { return { status: r.status, data: j }; });
+    }).then(function(result) {
+      if (result.status >= 400) reject(result.data);
+      else resolve(result.data);
+    }).catch(reject);
+  });
+}
+
+function testBackendConnection() {
+  saveBackendConfig();
+  var statusEl = document.getElementById('backendStatus');
+  statusEl.textContent = '正在测试连接...';
+  statusEl.style.color = 'var(--text3)';
+  fetch(backendConfig.url.replace(/\/$/, '') + '/api/health')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.status === 'ok') {
+        statusEl.innerHTML = '✅ 连接成功！服务版本: ' + data.version;
+        statusEl.style.color = '#22c55e';
+      } else {
+        statusEl.textContent = '❌ 连接失败: ' + JSON.stringify(data);
+        statusEl.style.color = '#ef4444';
+      }
+    })
+    .catch(function(e) {
+      statusEl.textContent = '❌ 无法连接: ' + e.message;
+      statusEl.style.color = '#ef4444';
+    });
+}
+
+function toggleBackendMode() {
+  saveBackendConfig();
+  if (!backendConfig.apiKey) {
+    alert('请先输入API Key');
+    return;
+  }
+  backendConfig.enabled = !backendConfig.enabled;
+  saveBackendConfig();
+  loadBackendConfig();
+  if (backendConfig.enabled) {
+    alert('已切换到后端模式\n正在从后端拉取数据...');
+    syncFromBackend();
+  } else {
+    alert('已切换到本地模式\n数据将存储在浏览器中');
+    renderAll();
+  }
+}
+
+function syncToBackend() {
+  if (!backendConfig.apiKey) { alert('请先输入API Key'); return; }
+  var statusEl = document.getElementById('backendStatus');
+  statusEl.textContent = '正在上传数据到后端...';
+  statusEl.style.color = 'var(--text3)';
+
+  Promise.all([
+    apiRequest('/api/snapshots/batch', 'POST', { snapshots: appData.snapshots }),
+    apiRequest('/api/stocks', 'POST', { stocks: appData.limitUpStocks, date: appData.snapshots.length ? appData.snapshots[appData.snapshots.length-1].date : new Date().toISOString().split('T')[0] }),
+  ]).then(function(results) {
+    // 上传交易记录
+    var promises = (appData.trades || []).map(function(t) {
+      return apiRequest('/api/trades', 'POST', t).catch(function() {});
+    });
+    return Promise.all(promises).then(function() { return results; });
+  }).then(function() {
+    statusEl.innerHTML = '✅ 数据上传成功！快照: ' + appData.snapshots.length + '条, 股票: ' + appData.limitUpStocks.length + '只, 交易: ' + (appData.trades||[]).length + '笔';
+    statusEl.style.color = '#22c55e';
+  }).catch(function(e) {
+    statusEl.textContent = '❌ 上传失败: ' + (e.error || e.message || JSON.stringify(e));
+    statusEl.style.color = '#ef4444';
+  });
+}
+
+function syncFromBackend() {
+  if (!backendConfig.apiKey) { alert('请先输入API Key'); return; }
+  var statusEl = document.getElementById('backendStatus');
+  statusEl.textContent = '正在从后端拉取数据...';
+  statusEl.style.color = 'var(--text3)';
+
+  Promise.all([
+    apiRequest('/api/snapshots', 'GET'),
+    apiRequest('/api/stocks', 'GET'),
+    apiRequest('/api/trades', 'GET'),
+  ]).then(function(results) {
+    appData.snapshots = results[0] || [];
+    // 股票只取最新日期的
+    var stocks = results[1] || [];
+    if (stocks.length > 0) {
+      var latestDate = stocks[0].date;
+      appData.limitUpStocks = stocks.filter(function(s) { return s.date === latestDate; });
+    } else {
+      appData.limitUpStocks = [];
+    }
+    appData.trades = results[2] || [];
+    saveData();
+    renderAll();
+    statusEl.innerHTML = '✅ 数据拉取成功！快照: ' + appData.snapshots.length + '条, 股票: ' + appData.limitUpStocks.length + '只, 交易: ' + appData.trades.length + '笔';
+    statusEl.style.color = '#22c55e';
+  }).catch(function(e) {
+    statusEl.textContent = '❌ 拉取失败: ' + (e.error || e.message || JSON.stringify(e));
+    statusEl.style.color = '#ef4444';
+  });
+}
+
 // 启动（V1.2增强）
 window.addEventListener('DOMContentLoaded', function() {
   init();
   renderSavedConditions();
   initTradeForm();
+  loadBackendConfig();
   var tradeDateEl = document.getElementById('tradeDate');
   if (tradeDateEl) tradeDateEl.addEventListener('change', updateTradeStageHint);
 });
@@ -1204,6 +1486,98 @@ window.addEventListener('DOMContentLoaded', function() {
   .cycle-compare-item.selected { border-color: var(--blue); background: rgba(59,130,246,.1); }
   .stat-mini { font-size: 11px; color: var(--text3); }
 
+
+  /* ==================== V2.0 移动端响应式适配 ==================== */
+  @media (max-width: 768px) {
+    body { font-size: 14px; }
+    main { padding: 12px; }
+    header { padding: 8px 12px; }
+    header .font-bold { font-size: 14px; }
+    header .text-xs { font-size: 10px; }
+    .btn { padding: 8px 14px; font-size: 12px; min-height: 36px; }
+    .tab-btn { padding: 8px 14px; font-size: 13px; min-height: 40px; display: flex; align-items: center; }
+    .stat-value { font-size: 22px; }
+    .card { padding: 12px; }
+    .card p-5 { padding: 12px; }
+    .grid-cols-12 { grid-template-columns: repeat(6, 1fr) !important; }
+    .grid-cols-12 > .col-span-8,
+    .grid-cols-12 > .col-span-7,
+    .grid-cols-12 > .col-span-6,
+    .grid-cols-12 > .col-span-5,
+    .grid-cols-12 > .col-span-4 { grid-column: span 6 !important; }
+    .grid-cols-12 > .col-span-3 { grid-column: span 3 !important; }
+    .grid-cols-4 { grid-template-columns: repeat(2, 1fr) !important; }
+    .grid-cols-3 { grid-template-columns: repeat(2, 1fr) !important; }
+    .grid-cols-5 { grid-template-columns: repeat(2, 1fr) !important; }
+    .temp-ring { width: 140px; height: 140px; }
+    .modal-box { width: 95% !important; max-height: 90vh !important; margin: 10px; }
+    .modal-body { padding: 12px; }
+    .detail-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+    .detail-item { padding: 8px; }
+    .detail-value { font-size: 14px; }
+    .predict-bar { height: 100px; }
+    .trade-form-row { grid-template-columns: repeat(2, 1fr) !important; }
+    .strategy-card { padding: 8px; }
+    .strategy-card .text-2xl { font-size: 20px; }
+    .strategy-card .font-bold { font-size: 12px; }
+    .strategy-card .text-xs { font-size: 10px; }
+    table { font-size: 12px; }
+    th, td { padding: 8px 6px; }
+    .sector-bar { font-size: 11px; padding: 0 8px; min-height: 28px; }
+    .ladder-item { padding: 6px 8px; font-size: 12px; min-height: 32px; display: flex; align-items: center; }
+    .saved-condition { padding: 8px 10px; }
+    .cycle-compare-item { padding: 8px; }
+    .action-card { padding: 12px; }
+    .step-indicator { flex-wrap: wrap; }
+    .input-field { font-size: 13px; min-height: 36px; }
+    select.input-field { min-height: 36px; }
+  }
+
+  @media (max-width: 480px) {
+    body { font-size: 13px; }
+    main { padding: 8px; }
+    .grid-cols-12 { grid-template-columns: 1fr !important; }
+    .grid-cols-12 > * { grid-column: span 1 !important; }
+    .grid-cols-4 { grid-template-columns: 1fr !important; }
+    .grid-cols-3 { grid-template-columns: 1fr !important; }
+    .grid-cols-5 { grid-template-columns: 1fr !important; }
+    .grid-cols-2 { grid-template-columns: 1fr !important; }
+    .stat-value { font-size: 20px; }
+    .temp-ring { width: 120px; height: 120px; }
+    .modal-box { width: 100% !important; border-radius: 12px 12px 0 0; position: fixed; bottom: 0; left: 0; right: 0; max-height: 85vh; }
+    .detail-grid { grid-template-columns: 1fr 1fr !important; }
+    .trade-form-row { grid-template-columns: 1fr !important; }
+    .tab-btn { padding: 10px 12px; font-size: 12px; }
+    .btn { padding: 10px 16px; font-size: 13px; min-height: 44px; }
+    .card { padding: 10px; }
+    .strategy-card { padding: 10px 8px; }
+    .strategy-card .text-2xl { font-size: 24px; }
+    .strategy-card .font-bold { font-size: 13px; }
+    .predict-col .bar { max-width: 30px; }
+    .sector-bar { font-size: 10px; min-height: 26px; }
+    .sector-bar .sector-count { font-size: 10px; }
+    table { font-size: 11px; }
+    th, td { padding: 6px 4px; }
+    .input-field { font-size: 14px; min-height: 40px; }
+    header .btn { padding: 6px 10px; font-size: 11px; min-height: 32px; }
+  }
+
+  /* 触摸设备优化 */
+  @media (hover: none) and (pointer: coarse) {
+    .tab-btn:active { transform: scale(0.97); }
+    .btn:active { transform: scale(0.97); }
+    .ladder-item:active { transform: translateX(2px) scale(0.98); }
+    .sector-bar:active { opacity: 0.8; transform: scale(0.99); }
+    .cycle-compare-item:active { transform: scale(0.98); }
+    tr:active td { background: rgba(59,130,246,.1); }
+  }
+
+  /* 移动端底部安全区适配 */
+  @supports (padding-bottom: env(safe-area-inset-bottom)) {
+    body { padding-bottom: env(safe-area-inset-bottom); }
+    main { padding-bottom: calc(env(safe-area-inset-bottom) + 20px); }
+  }
+
 </style>
 </head>
 <body>
@@ -1216,7 +1590,7 @@ window.addEventListener('DOMContentLoaded', function() {
     </div>
     <div>
       <div class="font-bold text-base">情绪周期选股系统</div>
-      <div class="text-xs" style="color:var(--text3)">Emotion Cycle Screener v1.2</div>
+      <div class="text-xs" style="color:var(--text3)">Emotion Cycle Screener v2.0</div>
     </div>
   </div>
   <div class="flex items-center gap-2">
@@ -2006,6 +2380,31 @@ window.addEventListener('DOMContentLoaded', function() {
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- V2.0: 后端服务设置 -->
+  <div class="card p-5 mt-4">
+    <div class="stat-label text-base font-semibold mb-4" style="color:var(--text)">🔌 后端服务设置（V2.0）</div>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="card2 p-3">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm font-semibold">当前模式</span>
+          <span id="backendModeBadge" class="tag" style="background:rgba(59,130,246,.15);color:var(--blue)">本地模式</span>
+        </div>
+        <div class="text-xs" style="color:var(--text3)">本地模式：数据存储在浏览器；后端模式：数据通过API同步到服务器，支持多设备访问</div>
+      </div>
+      <div class="space-y-2">
+        <div><label class="text-xs" style="color:var(--text2)">后端API地址</label><input type="text" class="input-field mt-1" id="backendUrl" value="http://127.0.0.1:5000"></div>
+        <div><label class="text-xs" style="color:var(--text2)">API Key</label><input type="password" class="input-field mt-1" id="backendApiKey" placeholder="输入API Key"></div>
+      </div>
+    </div>
+    <div class="flex gap-2 mt-3 flex-wrap">
+      <button class="btn btn-ghost text-xs" onclick="testBackendConnection()">🔍 测试连接</button>
+      <button class="btn btn-primary text-xs" onclick="toggleBackendMode()">🔄 切换模式</button>
+      <button class="btn btn-ghost text-xs" onclick="syncToBackend()">⬆️ 上传到后端</button>
+      <button class="btn btn-ghost text-xs" onclick="syncFromBackend()">⬇️ 从后端拉取</button>
+    </div>
+    <div id="backendStatus" class="text-xs mt-2" style="color:var(--text3)">启动后端：python server.py，然后注册用户获取API Key</div>
   </div>
 
   <!-- 数据管理 -->
@@ -5330,11 +5729,152 @@ function compareCycles() {
     '</div>';
 }
 
+
+// ==================== V2.0: 后端服务对接 ====================
+var BACKEND_CONFIG_KEY = 'emotion_screener_backend_config';
+var backendConfig = { enabled: false, url: 'http://127.0.0.1:5000', apiKey: '' };
+
+function loadBackendConfig() {
+  try {
+    var saved = localStorage.getItem(BACKEND_CONFIG_KEY);
+    if (saved) backendConfig = JSON.parse(saved);
+  } catch(e) { console.error('加载后端配置失败', e); }
+  var urlEl = document.getElementById('backendUrl');
+  var keyEl = document.getElementById('backendApiKey');
+  var badgeEl = document.getElementById('backendModeBadge');
+  if (urlEl) urlEl.value = backendConfig.url;
+  if (keyEl) keyEl.value = backendConfig.apiKey;
+  if (badgeEl) {
+    badgeEl.textContent = backendConfig.enabled ? '后端模式' : '本地模式';
+    badgeEl.style.background = backendConfig.enabled ? 'rgba(34,197,94,.15)' : 'rgba(59,130,246,.15)';
+    badgeEl.style.color = backendConfig.enabled ? '#22c55e' : 'var(--blue)';
+  }
+}
+
+function saveBackendConfig() {
+  backendConfig.url = document.getElementById('backendUrl')?.value || 'http://127.0.0.1:5000';
+  backendConfig.apiKey = document.getElementById('backendApiKey')?.value || '';
+  localStorage.setItem(BACKEND_CONFIG_KEY, JSON.stringify(backendConfig));
+}
+
+function apiRequest(path, method, data) {
+  return new Promise(function(resolve, reject) {
+    var url = backendConfig.url.replace(/\/$/, '') + path;
+    var opts = {
+      method: method || 'GET',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': backendConfig.apiKey }
+    };
+    if (data) opts.body = JSON.stringify(data);
+    fetch(url, opts).then(function(r) {
+      return r.json().then(function(j) { return { status: r.status, data: j }; });
+    }).then(function(result) {
+      if (result.status >= 400) reject(result.data);
+      else resolve(result.data);
+    }).catch(reject);
+  });
+}
+
+function testBackendConnection() {
+  saveBackendConfig();
+  var statusEl = document.getElementById('backendStatus');
+  statusEl.textContent = '正在测试连接...';
+  statusEl.style.color = 'var(--text3)';
+  fetch(backendConfig.url.replace(/\/$/, '') + '/api/health')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.status === 'ok') {
+        statusEl.innerHTML = '✅ 连接成功！服务版本: ' + data.version;
+        statusEl.style.color = '#22c55e';
+      } else {
+        statusEl.textContent = '❌ 连接失败: ' + JSON.stringify(data);
+        statusEl.style.color = '#ef4444';
+      }
+    })
+    .catch(function(e) {
+      statusEl.textContent = '❌ 无法连接: ' + e.message;
+      statusEl.style.color = '#ef4444';
+    });
+}
+
+function toggleBackendMode() {
+  saveBackendConfig();
+  if (!backendConfig.apiKey) {
+    alert('请先输入API Key');
+    return;
+  }
+  backendConfig.enabled = !backendConfig.enabled;
+  saveBackendConfig();
+  loadBackendConfig();
+  if (backendConfig.enabled) {
+    alert('已切换到后端模式\n正在从后端拉取数据...');
+    syncFromBackend();
+  } else {
+    alert('已切换到本地模式\n数据将存储在浏览器中');
+    renderAll();
+  }
+}
+
+function syncToBackend() {
+  if (!backendConfig.apiKey) { alert('请先输入API Key'); return; }
+  var statusEl = document.getElementById('backendStatus');
+  statusEl.textContent = '正在上传数据到后端...';
+  statusEl.style.color = 'var(--text3)';
+
+  Promise.all([
+    apiRequest('/api/snapshots/batch', 'POST', { snapshots: appData.snapshots }),
+    apiRequest('/api/stocks', 'POST', { stocks: appData.limitUpStocks, date: appData.snapshots.length ? appData.snapshots[appData.snapshots.length-1].date : new Date().toISOString().split('T')[0] }),
+  ]).then(function(results) {
+    // 上传交易记录
+    var promises = (appData.trades || []).map(function(t) {
+      return apiRequest('/api/trades', 'POST', t).catch(function() {});
+    });
+    return Promise.all(promises).then(function() { return results; });
+  }).then(function() {
+    statusEl.innerHTML = '✅ 数据上传成功！快照: ' + appData.snapshots.length + '条, 股票: ' + appData.limitUpStocks.length + '只, 交易: ' + (appData.trades||[]).length + '笔';
+    statusEl.style.color = '#22c55e';
+  }).catch(function(e) {
+    statusEl.textContent = '❌ 上传失败: ' + (e.error || e.message || JSON.stringify(e));
+    statusEl.style.color = '#ef4444';
+  });
+}
+
+function syncFromBackend() {
+  if (!backendConfig.apiKey) { alert('请先输入API Key'); return; }
+  var statusEl = document.getElementById('backendStatus');
+  statusEl.textContent = '正在从后端拉取数据...';
+  statusEl.style.color = 'var(--text3)';
+
+  Promise.all([
+    apiRequest('/api/snapshots', 'GET'),
+    apiRequest('/api/stocks', 'GET'),
+    apiRequest('/api/trades', 'GET'),
+  ]).then(function(results) {
+    appData.snapshots = results[0] || [];
+    // 股票只取最新日期的
+    var stocks = results[1] || [];
+    if (stocks.length > 0) {
+      var latestDate = stocks[0].date;
+      appData.limitUpStocks = stocks.filter(function(s) { return s.date === latestDate; });
+    } else {
+      appData.limitUpStocks = [];
+    }
+    appData.trades = results[2] || [];
+    saveData();
+    renderAll();
+    statusEl.innerHTML = '✅ 数据拉取成功！快照: ' + appData.snapshots.length + '条, 股票: ' + appData.limitUpStocks.length + '只, 交易: ' + appData.trades.length + '笔';
+    statusEl.style.color = '#22c55e';
+  }).catch(function(e) {
+    statusEl.textContent = '❌ 拉取失败: ' + (e.error || e.message || JSON.stringify(e));
+    statusEl.style.color = '#ef4444';
+  });
+}
+
 // 启动（V1.2增强）
 window.addEventListener('DOMContentLoaded', function() {
   init();
   renderSavedConditions();
   initTradeForm();
+  loadBackendConfig();
   var tradeDateEl = document.getElementById('tradeDate');
   if (tradeDateEl) tradeDateEl.addEventListener('change', updateTradeStageHint);
 });
