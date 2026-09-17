@@ -612,6 +612,132 @@ def fetch_data():
     db.commit()
     return jsonify({'message': '数据采集完成', 'result': result})
 
+
+# --- 实时行情（当日盘中/收盘即时数据） ---
+@app.route('/api/realtime', methods=['GET'])
+@require_auth
+def realtime():
+    """实时获取当日市场情绪数据（涨停/跌停/红盘率/封板率/晋级率 + 涨停股列表）"""
+    try:
+        import akshare as ak
+    except ImportError:
+        return jsonify({'error': '请先安装 akshare: pip install akshare'}), 500
+
+    now = datetime.now()
+    today_compact = now.strftime('%Y%m%d')
+    today_iso = now.strftime('%Y-%m-%d')
+    # 判断交易时段
+    hm = now.hour * 60 + now.minute
+    is_trading = (570 <= hm <= 690) or (780 <= hm <= 900)
+    market_status = '交易中' if is_trading else '已收盘'
+
+    result = {
+        'date': today_iso, 'time': now.strftime('%H:%M:%S'),
+        'marketStatus': market_status, 'isTrading': is_trading,
+    }
+    errors = []
+
+    # 1. 涨停池
+    limit_up = 0; max_board = 0; stocks = []
+    try:
+        zt = ak.stock_zt_pool_em(date=today_compact)
+        if zt is not None and len(zt) > 0:
+            limit_up = len(zt)
+            max_board = int(zt['连板数'].max()) if '连板数' in zt.columns else 1
+            for _, row in zt.iterrows():
+                seal_yi = float(row.get('封板资金', 0)) / 1e8
+                stocks.append({
+                    'code': str(row.get('代码', '')),
+                    'name': str(row.get('名称', '')),
+                    'board': int(row.get('连板数', 1)),
+                    'change': float(row.get('涨跌幅', 10)),
+                    'price': float(row.get('最新价', 0)),
+                    'turnover': float(row.get('换手率', 0)),
+                    'amount': float(row.get('成交额', 0)) / 1e8,
+                    'sealAmount': round(seal_yi, 2),
+                    'concept': str(row.get('所属行业', '')),
+                    'volumeRatio': 1.0,
+                    'firstSeal': str(row.get('首次封板时间', '')),
+                    'breakCount': int(row.get('炸板次数', 0)),
+                })
+    except Exception as e:
+        errors.append(f'涨停池: {e}')
+
+    # 2. 跌停池
+    limit_down = 0
+    try:
+        dt = ak.stock_zt_pool_dtgc_em(date=today_compact)
+        limit_down = len(dt) if dt is not None else 0
+    except Exception as e:
+        errors.append(f'跌停池: {e}')
+
+    # 3. 炸板池（计算封板率）
+    broken = 0
+    try:
+        zb = ak.stock_zt_pool_zbgc_em(date=today_compact)
+        broken = len(zb) if zb is not None else 0
+    except Exception as e:
+        errors.append(f'炸板池: {e}')
+
+    # 封板率 = 涨停 / (涨停 + 炸板)
+    seal_rate = round(limit_up / (limit_up + broken) * 100, 1) if (limit_up + broken) > 0 else 0
+
+    # 4. 市场广度（乐咕乐股，轻量）
+    up_count = down_count = 0; red_rate = 50.0
+    try:
+        act = ak.stock_market_activity_legu()
+        d = dict(zip(act['item'], act['value']))
+        up_count = int(float(d.get('上涨', 0)))
+        down_count = int(float(d.get('下跌', 0)))
+        total_breadth = up_count + down_count + int(float(d.get('平盘', 0)))
+        red_rate = round(up_count / total_breadth * 100, 1) if total_breadth > 0 else 50.0
+    except Exception as e:
+        errors.append(f'市场广度: {e}')
+
+    # 5. 晋级率 = 今日连板数 / 昨日涨停数
+    promote_rate = 0.0
+    try:
+        lianban = len([s for s in stocks if s['board'] >= 2])
+        # 从数据库取昨日涨停数
+        db = get_db()
+        row = db.execute('SELECT limit_up FROM snapshots WHERE user_id=? ORDER BY date DESC LIMIT 1',
+                        (g.user_id,)).fetchone()
+        prev_limit_up = row['limit_up'] if row else limit_up
+        promote_rate = round(lianban / prev_limit_up * 100, 1) if prev_limit_up > 0 else 0
+    except Exception as e:
+        errors.append(f'晋级率: {e}')
+
+    # 6. 温度计算（与前端一致的加权模型）
+    # 涨停家数20% 跌停15% 红盘率20% 封板率15% 晋级率15% 最高连板15%
+    lu_score = min(100, limit_up / 120 * 100)
+    ld_score = max(0, 100 - limit_down / 20 * 100)
+    temp = int(lu_score * 0.20 + ld_score * 0.15 + red_rate * 0.20 +
+               seal_rate * 0.15 + promote_rate * 0.15 +
+               min(100, max_board / 7 * 100) * 0.15)
+
+    if temp < 30: stage = 'ice'
+    elif temp < 45: stage = 'repair' if temp > 35 else 'ebb'
+    elif temp < 65: stage = 'warm'
+    elif temp < 80: stage = 'hot'
+    else: stage = 'hot'
+
+    stage_names = {'ice': '冰点', 'repair': '修复', 'warm': '升温', 'hot': '高潮', 'ebb': '退潮'}
+
+    result.update({
+        'limitUp': limit_up, 'limitDown': limit_down,
+        'upCount': up_count, 'downCount': down_count,
+        'redRate': red_rate, 'sealRate': seal_rate,
+        'promoteRate': promote_rate, 'maxBoard': max_board,
+        'everLimit': limit_up + broken, 'sealed': limit_up,
+        'temperature': temp, 'stage': stage,
+        'stageName': stage_names.get(stage, stage),
+        'broken': broken,
+        'stocks': sorted(stocks, key=lambda x: (-x['board'], x['code'])),
+        'errors': errors if errors else None,
+    })
+    return jsonify(result)
+
+
 # ==================== 启动 ====================
 if __name__ == '__main__':
     init_db()
